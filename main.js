@@ -101,7 +101,7 @@ function calculateMilitary(hand) {
 
 // Calculate morale
 function calculateMorale(luxury, food) {
-  return Math.floor(luxury + food / 2);
+  return luxury + food;
 }
 
 // Calculate population
@@ -1174,9 +1174,9 @@ async function processInternalPressurePhase() {
       // Food Stress
       const pop = player.stats.population;
       const food = player.stats.food;
-      if (food < pop * 4) {
+      if (food < pop * 2) {
         player.stats.unrest += 10;
-      } else if (food < pop * 2) {
+      } else if (food < pop * 4) {
         player.stats.unrest += 5;
       }
       
@@ -1210,6 +1210,11 @@ async function advancePhase() {
   
   await runTransaction(gameRef, (gameData) => {
     if (!gameData) return;
+    
+    // Verify host in transaction (prevent console manipulation)
+    if (gameData.hostId !== currentPlayerId) {
+      throw new Error('Only the host can advance phases');
+    }
     
     // Check for game over
     if (gameData.gameOver) {
