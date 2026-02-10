@@ -499,8 +499,9 @@ async function handleCreateGame() {
       // Use transaction to check if code exists
       const result = await runTransaction(gameRef, (currentData) => {
         if (currentData !== null) {
-          // Code already exists, abort transaction
-          return undefined; // undefined return aborts transaction
+          // Code already exists - returning undefined signals to Firebase
+          // that no update should occur, aborting this transaction attempt
+          return undefined;
         }
         
         // Code is available, create the game
@@ -1193,13 +1194,14 @@ async function processInternalPressurePhase() {
       const player = gameData.players[playerId];
       
       // Food Stress (per rulebook)
+      // Checks most severe condition first, then less severe via else-if
       const pop = player.stats.population;
       const food = player.stats.food;
       if (food < pop * 2) {
-        // Severe shortage: +10 unrest
+        // Severe shortage: food below 2x population = +10 unrest
         player.stats.unrest += 10;
       } else if (food < pop * 4) {
-        // Moderate shortage: +5 unrest
+        // Moderate shortage: food below 4x population = +5 unrest
         player.stats.unrest += 5;
       }
       
