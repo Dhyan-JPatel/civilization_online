@@ -376,9 +376,9 @@ async function performInternalPressure() {
         if (player.collapsed) continue;
         
         // Food stress
-        if (player.stats.food < 0) {
+        if (player.stats.food < player.stats.population * 4) {
           player.stats.unrest += 10;
-        } else if (player.stats.food < player.stats.population) {
+        } else if (player.stats.food < player.stats.population * 2) {
           player.stats.unrest += 5;
         }
         
@@ -389,10 +389,9 @@ async function performInternalPressure() {
         }
         
         // Economic collapse check
-        if (player.stats.economy < 0) {
+        const economyCards = player.hand.filter(card => card.type === 'economy');
+        if (economyCards.length === 0) {
           player.stats.unrest += 10;
-          player.collapsed = true;
-          player.collapseReason = 'Economic collapse';
         }
         
         // Trigger rebellion if unrest >= 100
