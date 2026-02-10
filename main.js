@@ -8,6 +8,7 @@ import {
   startGame,
   advancePhase,
   buyCard,
+  playCard,
   buyFarm,
   buyLuxury,
   reduceUnrest,
@@ -102,6 +103,7 @@ function setupEventListeners() {
   document.getElementById('closeWarModal').addEventListener('click', hideWarModal);
   document.getElementById('closeTradeModal').addEventListener('click', hideTradeModal);
   document.getElementById('closeRebellionModal').addEventListener('click', hideRebellionModal);
+  document.getElementById('closeDiceResultModal').addEventListener('click', hideDiceResultModal);
   document.getElementById('btnDeclareWar').addEventListener('click', handleDeclareWar);
   document.getElementById('btnSendTrade').addEventListener('click', handleSendTrade);
 }
@@ -307,6 +309,17 @@ function hideRebellionModal() {
   document.getElementById('rebellionModal').classList.add('hidden');
 }
 
+function showDiceResultModal(title, content) {
+  const modal = document.getElementById('diceResultModal');
+  const contentDiv = document.getElementById('diceResultContent');
+  contentDiv.innerHTML = `<h3>${title}</h3>${content}`;
+  modal.classList.remove('hidden');
+}
+
+function hideDiceResultModal() {
+  document.getElementById('diceResultModal').classList.add('hidden');
+}
+
 // Update Lobby UI
 function updateLobbyUI(game) {
   if (!game) return;
@@ -368,10 +381,17 @@ function updateGameUI(game) {
   handDisplay.innerHTML = '';
   document.getElementById('handCount').textContent = player.hand.length;
   
-  player.hand.forEach(card => {
+  player.hand.forEach((card, index) => {
     const cardDiv = document.createElement('div');
     cardDiv.className = `card card-${card.type}`;
     cardDiv.textContent = `${card.value}${card.suit}`;
+    cardDiv.style.cursor = 'pointer';
+    cardDiv.title = 'Click to play/discard this card';
+    cardDiv.addEventListener('click', () => {
+      if (confirm(`Play/discard ${card.value}${card.suit}?`)) {
+        playCard(index);
+      }
+    });
     handDisplay.appendChild(cardDiv);
   });
   
@@ -434,6 +454,107 @@ function updateGameUI(game) {
     showVictoryCountdown(game.victoryCountdown);
   } else {
     hideVictoryCountdown();
+  }
+  
+  // Check for and display dice results from rebellion or war
+  if (player.rebellion && player.rebellion.lastDiceRoll) {
+    const roll = player.rebellion.lastDiceRoll;
+    const content = `
+      <div style="margin: 20px 0;">
+        <p><strong>🎲 Rebellion Dice Battle</strong></p>
+        <div style="display: flex; justify-content: space-around; margin: 15px 0;">
+          <div style="text-align: center;">
+            <div style="font-size: 24px;">👥</div>
+            <div><strong>Rebels</strong></div>
+            <div>${roll.rebelDice} dice: ${roll.rebelRolls.join(', ')}</div>
+            <div style="font-size: 20px; margin-top: 5px;"><strong>Total: ${roll.rebelTotal}</strong></div>
+          </div>
+          <div style="text-align: center;">
+            <div style="font-size: 24px;">🛡️</div>
+            <div><strong>Government</strong></div>
+            <div>${roll.govDice} dice: ${roll.govRolls.join(', ')}</div>
+            <div style="font-size: 20px; margin-top: 5px;"><strong>Total: ${roll.govTotal}</strong></div>
+          </div>
+        </div>
+        <div style="text-align: center; font-size: 18px; margin-top: 15px;">
+          <strong>${roll.winner === 'rebels' ? '👥 Rebels Win!' : '🛡️ Government Wins!'}</strong>
+        </div>
+      </div>
+    `;
+    showDiceResultModal('Rebellion Battle Results', content);
+    // Clear the dice roll after showing it once
+    setTimeout(() => {
+      if (player.rebellion) {
+        player.rebellion.lastDiceRoll = null;
+      }
+    }, 1000);
+  }
+  
+  // Check for war battle results
+  if (player.wars) {
+    Object.entries(player.wars).forEach(([targetId, war]) => {
+      if (war.lastBattle && war.lastBattle.trackChange !== undefined) {
+        const battle = war.lastBattle;
+        const targetPlayer = game.players[targetId];
+        const content = `
+          <div style="margin: 20px 0;">
+            <p><strong>⚔️ Battle Results vs ${targetPlayer ? targetPlayer.name : 'Unknown'}</strong></p>
+            <div style="display: flex; justify-content: space-around; margin: 15px 0;">
+              <div style="text-align: center;">
+                <div style="font-size: 24px;">⚔️</div>
+                <div><strong>Attacker (You)</strong></div>
+                <div>Military: ${battle.attackerMilitary}</div>
+              </div>
+              <div style="text-align: center;">
+                <div style="font-size: 24px;">🛡️</div>
+                <div><strong>Defender</strong></div>
+                <div>Military: ${battle.defenderMilitary}</div>
+              </div>
+            </div>
+            ${battle.casualtyRoll > 0 ? `
+              <div style="text-align: center; margin: 15px 0;">
+                <p><strong>🎲 Casualty Roll: ${battle.casualtyRoll}</strong></p>
+                <p>${battle.cardsLost} military card(s) lost</p>
+              </div>
+            ` : ''}
+            <div style="text-align: center; font-size: 18px; margin-top: 15px;">
+              <strong>${battle.winner === 'attacker' ? '⚔️ Victory!' : battle.winner === 'defender' ? '🛡️ Defeated!' : '⚖️ Draw!'}</strong>
+              <p>War track ${battle.trackChange > 0 ? 'increased' : battle.trackChange < 0 ? 'decreased' : 'unchanged'}</p>
+            </div>
+          </div>
+        `;
+        showDiceResultModal('Battle Results', content);
+        // Clear the battle result after showing it once
+        setTimeout(() => {
+          if (war.lastBattle) {
+            delete war.lastBattle.trackChange;
+          }
+        }, 1000);
+      }
+    });
+  }
+  
+  // Check for luxury purchase dice roll
+  if (player.lastLuxuryRoll !== undefined && player.lastLuxuryRoll !== null) {
+    const content = `
+      <div style="margin: 20px 0; text-align: center;">
+        <div style="font-size: 48px; margin: 20px 0;">🎲</div>
+        <p style="font-size: 24px;"><strong>You rolled: ${player.lastLuxuryRoll}</strong></p>
+        <p style="font-size: 18px; margin-top: 15px;">+${player.lastLuxuryRoll} Luxury added to your civilization!</p>
+      </div>
+    `;
+    showDiceResultModal('Luxury Purchase', content);
+    // Clear the roll after showing it once
+    setTimeout(async () => {
+      const { ref, runTransaction } = await import('./game.js');
+      const playerRef = ref(window.db, `games/${getCurrentGameCode()}/players/${getCurrentPlayerId()}`);
+      await runTransaction(playerRef, (p) => {
+        if (p) {
+          p.lastLuxuryRoll = null;
+        }
+        return p;
+      });
+    }, 1000);
   }
 }
 
