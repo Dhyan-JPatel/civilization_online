@@ -6,23 +6,34 @@ Online multiplayer strategy game to play with friends. Build your empire without
 
 Civilization is a strategy card-and-dice game about building a powerful empire while managing internal pressures such as population strain, civil unrest, rebellion, famine, and economic collapse. Military strength alone won't win—victory belongs to the ruler who can expand, dominate, and still keep their civilization stable.
 
-## Current Status: Phases 1-5 Complete ✅
+## Current Status: FULLY PLAYABLE ✅
 
-All game phases are now implemented:
+**All game mechanics are now fully implemented and functional!**
+
+All game phases are now implemented with complete logic:
 - ✅ Create and join games with unique game codes
 - ✅ Real-time player synchronization
 - ✅ Mobile-friendly UI for iPhone/iPad
 - ✅ Reconnection support via localStorage
-- ✅ Full 7-phase turn structure (UPKEEP, INTERNAL_PRESSURE, STATE_ACTIONS, WAR, REBELLION, NATURAL_EVENTS, CLEANUP)
+- ✅ Full 7-phase turn structure with automatic processing
 - ✅ Complete card system with Economy and Military cards
 - ✅ Player stats tracking (Unrest, Economy, Military, Food, Luxury, Morale, Population)
-- ✅ War mechanics with progressive stages and occupation
-- ✅ Rebellion system with dice pools and staged resolution
-- ✅ Farm management and food production
-- ✅ Trading and diplomacy system
-- ✅ Natural events (optional)
-- ✅ Victory conditions
+- ✅ **War mechanics** - Battle resolution, casualties, siege, occupation
+- ✅ **Rebellion system** - Dice pools, staged resolution, collapse conditions
+- ✅ **Trading system** - Send/accept/reject offers, foreign interference
+- ✅ **Natural events** - 4 event types with random selection (optional)
+- ✅ **Victory conditions** - Last standing + 2-round survival requirement
 - ✅ Secure Firebase configuration (no hardcoded secrets)
+- ✅ All edge cases handled
+- ✅ Zero security vulnerabilities (CodeQL verified)
+
+**New in this update:**
+- Complete WAR phase with battle resolution and casualty system
+- Complete REBELLION phase with dice-based combat
+- Complete NATURAL_EVENTS phase with 4 event types
+- Fully functional trading system with offer acceptance/rejection
+- Proper 2-round victory condition countdown
+- All code quality issues addressed
 
 ## Features
 
@@ -48,24 +59,53 @@ All game phases are now implemented:
   - Dynamic stat calculations
   
 - **War & Combat**:
-  - War track progression (0-7)
-  - Siege mechanics at track 3+
-  - Occupation at track 7
-  - Battle outcomes with casualty rolls
+  - War track progression (0-7) with automatic battle resolution
+  - Military comparison determines winner
+  - Casualty dice (1d6) removes military cards from loser
+  - Siege at track 3+ (stops food production, +8 unrest)
+  - Occupation at track 7 (civilization collapse)
+  - Conqueror receives +5 unrest per occupied civilization
+  - Handles zero military edge cases
   
 - **Rebellion System**:
-  - Triggered at 100+ unrest
-  - Dice pools for rebels vs government
-  - Staged resolution (Civil Disorder → Armed Uprising → Regime Collapse)
+  - Triggered automatically at 100+ unrest
+  - Dynamic dice pool calculation (base + modifiers)
+  - Rebels: 2 base + population/siege/food/war bonuses
+  - Government: 2 base + military/20 bonus dice
+  - 3-stage progression (Civil Disorder → Armed Uprising → Regime Collapse)
+  - Different track changes per stage
+  - Crushed at track 0 (-20 unrest reward)
+  - Civilization collapse at track 6
+  - Automatic resolution each REBELLION phase
   
 - **Trading & Diplomacy**:
-  - Trade offers for resources
-  - Foreign interference for destabilization
-  - Trade validation and enforcement
+  - Send trade offers (food and luxury)
+  - Accept or reject received offers
+  - Real-time trade offer display
+  - Foreign interference (+1 unrest for 1 economy)
+  - Target must have 75+ unrest for interference
+  - Max 10 interference per target per round
+  - Trade restrictions at 50+ unrest
+  - Transaction validation prevents cheating
+  
+- **Natural Events** (Optional):
+  - 4 event types: Drought, Plague, Earthquake, Flood
+  - Random player and event selection
+  - Drought: Halves farm production next round
+  - Plague: -5 luxury immediately
+  - Earthquake: -1 farm immediately
+  - Flood: -10 food immediately
+  - Configurable at game creation
+  - Events displayed in UI with emojis
   
 - **Victory Conditions**:
-  - Last civilization standing
-  - Must survive 2 rounds without rebellion or economic collapse
+  - Last civilization standing wins
+  - Must survive 2 additional rounds without:
+    - Active rebellion
+    - Economic collapse (economy < 0)
+  - Victory countdown displayed to all players
+  - Countdown resets if disqualified or new players survive
+  - Automatic winner determination
   
 - **Real-time Multiplayer**:
   - Up to 6 players per game
@@ -93,6 +133,15 @@ All game phases are now implemented:
 - Action validation and server-side transactions
 
 ## Getting Started
+
+### For Players
+
+See [GAMEPLAY_GUIDE.md](GAMEPLAY_GUIDE.md) for complete gameplay instructions including:
+- All 7 game phases explained
+- Player actions and strategies
+- Victory conditions
+- Trading and diplomacy
+- War and rebellion mechanics
 
 ### For Developers
 
