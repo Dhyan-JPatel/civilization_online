@@ -939,11 +939,19 @@ async function checkVictory() {
 async function buyCard() {
   if (!db || !currentGameCode || !currentPlayerId) return;
 
-  const playerRef = ref(db, `games/${currentGameCode}/players/${currentPlayerId}`);
+  const gameRef = ref(db, `games/${currentGameCode}`);
   
   try {
-    await runTransaction(playerRef, (player) => {
-      if (!player) return player;
+    await runTransaction(gameRef, (game) => {
+      if (!game) return game;
+      
+      // Phase validation
+      if (game.phase !== 'STATE_ACTIONS') {
+        throw new Error('Can only buy cards during STATE_ACTIONS phase');
+      }
+      
+      const player = game.players[currentPlayerId];
+      if (!player) return game;
       
       if (player.actions.boughtCard) {
         throw new Error('Already bought a card this round');
@@ -977,7 +985,7 @@ async function buyCard() {
       
       // Economy will be recalculated automatically
       
-      return player;
+      return game;
     });
     
     console.log('✅ Bought card');
@@ -992,11 +1000,19 @@ async function buyCard() {
 async function buyFarm() {
   if (!db || !currentGameCode || !currentPlayerId) return;
 
-  const playerRef = ref(db, `games/${currentGameCode}/players/${currentPlayerId}`);
+  const gameRef = ref(db, `games/${currentGameCode}`);
   
   try {
-    await runTransaction(playerRef, (player) => {
-      if (!player) return player;
+    await runTransaction(gameRef, (game) => {
+      if (!game) return game;
+      
+      // Phase validation
+      if (game.phase !== 'STATE_ACTIONS') {
+        throw new Error('Can only buy farms during STATE_ACTIONS phase');
+      }
+      
+      const player = game.players[currentPlayerId];
+      if (!player) return game;
       
       if (player.actions.boughtFarm) {
         throw new Error('Already bought a farm this round');
@@ -1009,7 +1025,7 @@ async function buyFarm() {
       player.stats.farms += 1;
       player.actions.boughtFarm = true;
       
-      return player;
+      return game;
     });
     
     console.log('✅ Bought farm');
@@ -1024,13 +1040,21 @@ async function buyFarm() {
 async function buyLuxury() {
   if (!db || !currentGameCode || !currentPlayerId) return;
 
-  const playerRef = ref(db, `games/${currentGameCode}/players/${currentPlayerId}`);
+  const gameRef = ref(db, `games/${currentGameCode}`);
   
   try {
     const diceRoll = Math.floor(Math.random() * 6) + 1;
     
-    await runTransaction(playerRef, (player) => {
-      if (!player) return player;
+    await runTransaction(gameRef, (game) => {
+      if (!game) return game;
+      
+      // Phase validation
+      if (game.phase !== 'STATE_ACTIONS') {
+        throw new Error('Can only buy luxury during STATE_ACTIONS phase');
+      }
+      
+      const player = game.players[currentPlayerId];
+      if (!player) return game;
       
       if (player.actions.boughtLuxury) {
         throw new Error('Already bought luxury this round');
@@ -1045,18 +1069,13 @@ async function buyLuxury() {
       }
       
       player.stats.luxury += diceRoll;
+      player.lastLuxuryRoll = diceRoll;
       player.actions.boughtLuxury = true;
       
-      return player;
+      return game;
     });
     
     console.log(`✅ Bought luxury (rolled ${diceRoll})`);
-    // Store the dice roll result in player data for UI display
-    await runTransaction(playerRef, (player) => {
-      if (!player) return player;
-      player.lastLuxuryRoll = diceRoll;
-      return player;
-    });
   } catch (error) {
     console.error('❌ Failed to buy luxury:', error);
     alert('❌ ' + error.message);
@@ -1103,11 +1122,19 @@ async function playCard(cardIndex) {
 async function reduceUnrest() {
   if (!db || !currentGameCode || !currentPlayerId) return;
 
-  const playerRef = ref(db, `games/${currentGameCode}/players/${currentPlayerId}`);
+  const gameRef = ref(db, `games/${currentGameCode}`);
   
   try {
-    await runTransaction(playerRef, (player) => {
-      if (!player) return player;
+    await runTransaction(gameRef, (game) => {
+      if (!game) return game;
+      
+      // Phase validation
+      if (game.phase !== 'STATE_ACTIONS') {
+        throw new Error('Can only reduce unrest during STATE_ACTIONS phase');
+      }
+      
+      const player = game.players[currentPlayerId];
+      if (!player) return game;
       
       if (player.actions.reducedUnrest) {
         throw new Error('Already reduced unrest this round');
@@ -1116,7 +1143,7 @@ async function reduceUnrest() {
       player.stats.unrest = Math.max(0, player.stats.unrest - 10);
       player.actions.reducedUnrest = true;
       
-      return player;
+      return game;
     });
     
     console.log('✅ Reduced unrest');
@@ -1136,6 +1163,11 @@ async function declareWar(targetPlayerId) {
   try {
     await runTransaction(gameRef, (game) => {
       if (!game) return game;
+      
+      // Phase validation
+      if (game.phase !== 'STATE_ACTIONS') {
+        throw new Error('Can only declare war during STATE_ACTIONS phase');
+      }
       
       const player = game.players[currentPlayerId];
       const target = game.players[targetPlayerId];
@@ -1186,6 +1218,11 @@ async function sendTradeOffer(targetPlayerId, offer, request) {
   try {
     await runTransaction(gameRef, (game) => {
       if (!game) return game;
+      
+      // Phase validation
+      if (game.phase !== 'STATE_ACTIONS') {
+        throw new Error('Can only send trade offers during STATE_ACTIONS phase');
+      }
       
       const player = game.players[currentPlayerId];
       const target = game.players[targetPlayerId];
@@ -1347,6 +1384,11 @@ async function foreignInterference(targetPlayerId) {
   try {
     await runTransaction(gameRef, (game) => {
       if (!game) return game;
+      
+      // Phase validation
+      if (game.phase !== 'INTERNAL_PRESSURE') {
+        throw new Error('Foreign interference can only be performed during INTERNAL_PRESSURE phase');
+      }
       
       const player = game.players[currentPlayerId];
       const target = game.players[targetPlayerId];
