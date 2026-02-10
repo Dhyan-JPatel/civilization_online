@@ -208,6 +208,8 @@ const leaveGameBtn = document.getElementById('leaveGameBtn');
 // Game screen elements
 const gamePhase = document.getElementById('gamePhase');
 const gameRound = document.getElementById('gameRound');
+const victoryBanner = document.getElementById('victoryBanner');
+const victoryMessage = document.getElementById('victoryMessage');
 const playerDashboardName = document.getElementById('playerDashboardName');
 const statUnrest = document.getElementById('statUnrest');
 const statEconomy = document.getElementById('statEconomy');
@@ -266,33 +268,57 @@ function initializeEventListeners() {
   
   // Action buttons
   actionBuyCard.addEventListener('click', async () => {
-    const result = await buyCard();
-    if (!result.success) {
-      alert(result.error);
+    try {
+      const result = await buyCard();
+      if (!result.success) {
+        alert(`❌ ${result.error}`);
+      } else {
+        alert('✅ Card purchased!');
+      }
+    } catch (error) {
+      alert(`❌ Error: ${error.message}`);
     }
   });
   
   actionBuyFarm.addEventListener('click', async () => {
-    const result = await buyFarm();
-    if (!result.success) {
-      alert(result.error);
+    try {
+      const result = await buyFarm();
+      if (!result.success) {
+        alert(`❌ ${result.error}`);
+      } else {
+        alert('✅ Farm purchased!');
+      }
+    } catch (error) {
+      alert(`❌ Error: ${error.message}`);
     }
   });
   
   actionBuyLuxury.addEventListener('click', async () => {
     const amount = prompt('How much luxury to buy? (1 economy per die roll)');
     if (amount && !isNaN(amount) && amount > 0) {
-      const result = await buyLuxury(parseInt(amount));
-      if (!result.success) {
-        alert(result.error);
+      try {
+        const result = await buyLuxury(parseInt(amount));
+        if (!result.success) {
+          alert(`❌ ${result.error}`);
+        } else {
+          alert('✅ Luxury purchased!');
+        }
+      } catch (error) {
+        alert(`❌ Error: ${error.message}`);
       }
     }
   });
   
   actionReduceUnrest.addEventListener('click', async () => {
-    const result = await reduceUnrest();
-    if (!result.success) {
-      alert(result.error);
+    try {
+      const result = await reduceUnrest();
+      if (!result.success) {
+        alert(`❌ ${result.error}`);
+      } else {
+        alert('✅ Unrest reduced by 10!');
+      }
+    } catch (error) {
+      alert(`❌ Error: ${error.message}`);
     }
   });
   
@@ -672,6 +698,19 @@ function updateGameUI(gameData) {
   gamePhase.textContent = gameData.phase || 'SETUP';
   gameRound.textContent = gameData.round || '1';
   
+  // Check for victory
+  if (gameData.gameOver) {
+    victoryBanner.classList.remove('hidden');
+    if (gameData.winner) {
+      const winnerName = gameData.players[gameData.winner]?.name || 'Unknown';
+      victoryMessage.textContent = `${winnerName} has won the game!`;
+    } else {
+      victoryMessage.textContent = 'All civilizations have collapsed. No winner.';
+    }
+  } else {
+    victoryBanner.classList.add('hidden');
+  }
+  
   // Get current player data
   const player = gameData.players[currentPlayerId];
   if (!player) return;
@@ -1033,6 +1072,45 @@ function clearSavedGame() {
 // Game Phase Processing
 // ============================================================================
 
+// Check for victory conditions
+function checkVictoryConditions(gameData) {
+  // Count non-collapsed civilizations
+  const activePlayers = Object.keys(gameData.players).filter(
+    playerId => !gameData.players[playerId].collapsed
+  );
+  
+  if (activePlayers.length === 1) {
+    const winner = gameData.players[activePlayers[0]];
+    
+    // Winner must survive 2 rounds without rebellion or economic collapse
+    if (!gameData.victoryWatch) {
+      gameData.victoryWatch = {
+        playerId: activePlayers[0],
+        roundsRemaining: 2
+      };
+    } else if (gameData.victoryWatch.playerId === activePlayers[0]) {
+      // Check if winner had rebellion or economic collapse
+      if (winner.rebellionTrack !== null || winner.stats.economy === 0) {
+        // Reset victory watch
+        gameData.victoryWatch.roundsRemaining = 2;
+      } else {
+        gameData.victoryWatch.roundsRemaining -= 1;
+        
+        if (gameData.victoryWatch.roundsRemaining <= 0) {
+          gameData.winner = activePlayers[0];
+          gameData.gameOver = true;
+        }
+      }
+    }
+  } else if (activePlayers.length === 0) {
+    // Everyone collapsed
+    gameData.gameOver = true;
+    gameData.winner = null;
+  }
+  
+  return gameData;
+}
+
 // Process UPKEEP phase (automatic calculations)
 async function processUpkeepPhase() {
   if (!isHost || !currentGameCode) return;
@@ -1119,6 +1197,12 @@ async function advancePhase() {
   await runTransaction(gameRef, (gameData) => {
     if (!gameData) return;
     
+    // Check for game over
+    if (gameData.gameOver) {
+      alert('Game is over!');
+      return;
+    }
+    
     const currentPhaseIndex = PHASES.indexOf(gameData.phase);
     
     // Auto-process certain phases before advancing
@@ -1146,6 +1230,9 @@ async function advancePhase() {
       // End of round, go back to UPKEEP and increment round
       gameData.phase = 'UPKEEP';
       gameData.round += 1;
+      
+      // Check victory conditions
+      gameData = checkVictoryConditions(gameData);
     }
     
     // Auto-advance turn index for turn-based phases
