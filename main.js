@@ -101,7 +101,7 @@ function calculateMilitary(hand) {
 
 // Calculate morale
 function calculateMorale(luxury, food) {
-  return luxury + food;
+  return Math.floor(luxury + food);
 }
 
 // Calculate population
@@ -499,8 +499,8 @@ async function handleCreateGame() {
       // Use transaction to check if code exists
       const result = await runTransaction(gameRef, (currentData) => {
         if (currentData !== null) {
-          // Code already exists, abort this transaction
-          return; // This will fail the transaction
+          // Code already exists, abort transaction
+          return undefined; // undefined return aborts transaction
         }
         
         // Code is available, create the game
@@ -1234,7 +1234,8 @@ async function advancePhase() {
     
     // Verify host in transaction (prevent console manipulation)
     if (gameData.hostId !== currentPlayerId) {
-      throw new Error('Only the host can advance phases');
+      // Transaction will silently abort, validation happens client-side before this
+      return undefined;
     }
     
     // Check for game over
