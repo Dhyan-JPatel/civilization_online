@@ -376,9 +376,9 @@ async function performInternalPressure() {
         if (player.collapsed) continue;
         
         // Food stress
-        if (player.stats.food < player.stats.population * 4) {
+        if (player.stats.food < player.stats.population * 2) {
           player.stats.unrest += 10;
-        } else if (player.stats.food < player.stats.population * 2) {
+        } else if (player.stats.food < player.stats.population * 4) {
           player.stats.unrest += 5;
         }
         
@@ -388,7 +388,7 @@ async function performInternalPressure() {
           player.stats.unrest += 8;
         }
         
-        // Economic collapse check
+        // Economic Collapse Pressure - add +10 unrest if no economy cards
         const economyCards = player.hand.filter(card => card.type === 'economy');
         if (economyCards.length === 0) {
           player.stats.unrest += 10;
