@@ -457,104 +457,96 @@ function updateGameUI(game) {
   }
   
   // Check for and display dice results from rebellion or war
+  // Note: These are displayed once when the modal data is first seen
+  // The data will be overwritten on the next roll naturally
   if (player.rebellion && player.rebellion.lastDiceRoll) {
     const roll = player.rebellion.lastDiceRoll;
-    const content = `
-      <div style="margin: 20px 0;">
-        <p><strong>🎲 Rebellion Dice Battle</strong></p>
-        <div style="display: flex; justify-content: space-around; margin: 15px 0;">
-          <div style="text-align: center;">
-            <div style="font-size: 24px;">👥</div>
-            <div><strong>Rebels</strong></div>
-            <div>${roll.rebelDice} dice: ${roll.rebelRolls.join(', ')}</div>
-            <div style="font-size: 20px; margin-top: 5px;"><strong>Total: ${roll.rebelTotal}</strong></div>
+    // Only show if we haven't shown this exact roll before
+    if (!window._lastRebellionRollShown || window._lastRebellionRollShown !== `${roll.rebelTotal}-${roll.govTotal}`) {
+      window._lastRebellionRollShown = `${roll.rebelTotal}-${roll.govTotal}`;
+      const content = `
+        <div style="margin: 20px 0;">
+          <p><strong>🎲 Rebellion Dice Battle</strong></p>
+          <div style="display: flex; justify-content: space-around; margin: 15px 0;">
+            <div style="text-align: center;">
+              <div style="font-size: 24px;">👥</div>
+              <div><strong>Rebels</strong></div>
+              <div>${roll.rebelDice} dice: ${roll.rebelRolls.join(', ')}</div>
+              <div style="font-size: 20px; margin-top: 5px;"><strong>Total: ${roll.rebelTotal}</strong></div>
+            </div>
+            <div style="text-align: center;">
+              <div style="font-size: 24px;">🛡️</div>
+              <div><strong>Government</strong></div>
+              <div>${roll.govDice} dice: ${roll.govRolls.join(', ')}</div>
+              <div style="font-size: 20px; margin-top: 5px;"><strong>Total: ${roll.govTotal}</strong></div>
+            </div>
           </div>
-          <div style="text-align: center;">
-            <div style="font-size: 24px;">🛡️</div>
-            <div><strong>Government</strong></div>
-            <div>${roll.govDice} dice: ${roll.govRolls.join(', ')}</div>
-            <div style="font-size: 20px; margin-top: 5px;"><strong>Total: ${roll.govTotal}</strong></div>
+          <div style="text-align: center; font-size: 18px; margin-top: 15px;">
+            <strong>${roll.winner === 'rebels' ? '👥 Rebels Win!' : '🛡️ Government Wins!'}</strong>
           </div>
         </div>
-        <div style="text-align: center; font-size: 18px; margin-top: 15px;">
-          <strong>${roll.winner === 'rebels' ? '👥 Rebels Win!' : '🛡️ Government Wins!'}</strong>
-        </div>
-      </div>
-    `;
-    showDiceResultModal('Rebellion Battle Results', content);
-    // Clear the dice roll after showing it once
-    setTimeout(() => {
-      if (player.rebellion) {
-        player.rebellion.lastDiceRoll = null;
-      }
-    }, 1000);
+      `;
+      showDiceResultModal('Rebellion Battle Results', content);
+    }
   }
   
   // Check for war battle results
   if (player.wars) {
     Object.entries(player.wars).forEach(([targetId, war]) => {
       if (war.lastBattle && war.lastBattle.trackChange !== undefined) {
-        const battle = war.lastBattle;
-        const targetPlayer = game.players[targetId];
-        const content = `
-          <div style="margin: 20px 0;">
-            <p><strong>⚔️ Battle Results vs ${targetPlayer ? targetPlayer.name : 'Unknown'}</strong></p>
-            <div style="display: flex; justify-content: space-around; margin: 15px 0;">
-              <div style="text-align: center;">
-                <div style="font-size: 24px;">⚔️</div>
-                <div><strong>Attacker (You)</strong></div>
-                <div>Military: ${battle.attackerMilitary}</div>
+        // Only show if we haven't shown this exact battle before
+        const battleKey = `${targetId}-${war.lastBattle.attackerMilitary}-${war.lastBattle.defenderMilitary}-${war.lastBattle.casualtyRoll}`;
+        if (!window._lastBattleShown || window._lastBattleShown !== battleKey) {
+          window._lastBattleShown = battleKey;
+          const battle = war.lastBattle;
+          const targetPlayer = game.players[targetId];
+          const content = `
+            <div style="margin: 20px 0;">
+              <p><strong>⚔️ Battle Results vs ${targetPlayer ? targetPlayer.name : 'Unknown'}</strong></p>
+              <div style="display: flex; justify-content: space-around; margin: 15px 0;">
+                <div style="text-align: center;">
+                  <div style="font-size: 24px;">⚔️</div>
+                  <div><strong>Attacker (You)</strong></div>
+                  <div>Military: ${battle.attackerMilitary}</div>
+                </div>
+                <div style="text-align: center;">
+                  <div style="font-size: 24px;">🛡️</div>
+                  <div><strong>Defender</strong></div>
+                  <div>Military: ${battle.defenderMilitary}</div>
+                </div>
               </div>
-              <div style="text-align: center;">
-                <div style="font-size: 24px;">🛡️</div>
-                <div><strong>Defender</strong></div>
-                <div>Military: ${battle.defenderMilitary}</div>
+              ${battle.casualtyRoll > 0 ? `
+                <div style="text-align: center; margin: 15px 0;">
+                  <p><strong>🎲 Casualty Roll: ${battle.casualtyRoll}</strong></p>
+                  <p>${battle.cardsLost} military card(s) lost</p>
+                </div>
+              ` : ''}
+              <div style="text-align: center; font-size: 18px; margin-top: 15px;">
+                <strong>${battle.winner === 'attacker' ? '⚔️ Victory!' : battle.winner === 'defender' ? '🛡️ Defeated!' : '⚖️ Draw!'}</strong>
+                <p>War track ${battle.trackChange > 0 ? 'increased' : battle.trackChange < 0 ? 'decreased' : 'unchanged'}</p>
               </div>
             </div>
-            ${battle.casualtyRoll > 0 ? `
-              <div style="text-align: center; margin: 15px 0;">
-                <p><strong>🎲 Casualty Roll: ${battle.casualtyRoll}</strong></p>
-                <p>${battle.cardsLost} military card(s) lost</p>
-              </div>
-            ` : ''}
-            <div style="text-align: center; font-size: 18px; margin-top: 15px;">
-              <strong>${battle.winner === 'attacker' ? '⚔️ Victory!' : battle.winner === 'defender' ? '🛡️ Defeated!' : '⚖️ Draw!'}</strong>
-              <p>War track ${battle.trackChange > 0 ? 'increased' : battle.trackChange < 0 ? 'decreased' : 'unchanged'}</p>
-            </div>
-          </div>
-        `;
-        showDiceResultModal('Battle Results', content);
-        // Clear the battle result after showing it once
-        setTimeout(() => {
-          if (war.lastBattle) {
-            delete war.lastBattle.trackChange;
-          }
-        }, 1000);
+          `;
+          showDiceResultModal('Battle Results', content);
+        }
       }
     });
   }
   
   // Check for luxury purchase dice roll
   if (player.lastLuxuryRoll !== undefined && player.lastLuxuryRoll !== null) {
-    const content = `
-      <div style="margin: 20px 0; text-align: center;">
-        <div style="font-size: 48px; margin: 20px 0;">🎲</div>
-        <p style="font-size: 24px;"><strong>You rolled: ${player.lastLuxuryRoll}</strong></p>
-        <p style="font-size: 18px; margin-top: 15px;">+${player.lastLuxuryRoll} Luxury added to your civilization!</p>
-      </div>
-    `;
-    showDiceResultModal('Luxury Purchase', content);
-    // Clear the roll after showing it once
-    setTimeout(async () => {
-      const { ref, runTransaction } = await import('./game.js');
-      const playerRef = ref(window.db, `games/${getCurrentGameCode()}/players/${getCurrentPlayerId()}`);
-      await runTransaction(playerRef, (p) => {
-        if (p) {
-          p.lastLuxuryRoll = null;
-        }
-        return p;
-      });
-    }, 1000);
+    // Only show if we haven't shown this exact roll before
+    if (!window._lastLuxuryRollShown || window._lastLuxuryRollShown !== player.lastLuxuryRoll) {
+      window._lastLuxuryRollShown = player.lastLuxuryRoll;
+      const content = `
+        <div style="margin: 20px 0; text-align: center;">
+          <div style="font-size: 48px; margin: 20px 0;">🎲</div>
+          <p style="font-size: 24px;"><strong>You rolled: ${player.lastLuxuryRoll}</strong></p>
+          <p style="font-size: 18px; margin-top: 15px;">+${player.lastLuxuryRoll} Luxury added to your civilization!</p>
+        </div>
+      `;
+      showDiceResultModal('Luxury Purchase', content);
+    }
   }
 }
 

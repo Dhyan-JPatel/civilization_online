@@ -1074,10 +1074,15 @@ async function playCard(cardIndex) {
       if (!player) return player;
       
       if (cardIndex < 0 || cardIndex >= player.hand.length) {
-        throw new Error('Invalid card index');
+        throw new Error(`Card index ${cardIndex} is out of range (hand size: ${player.hand.length})`);
       }
       
       const card = player.hand[cardIndex];
+      
+      // Initialize discard pile if it doesn't exist
+      if (!player.discardPile) {
+        player.discardPile = [];
+      }
       
       // Remove card from hand and add to discard pile
       player.hand.splice(cardIndex, 1);
