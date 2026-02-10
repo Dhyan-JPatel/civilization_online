@@ -54,7 +54,7 @@ function generateGameCode() {
 
 // Generate unique player ID
 function generatePlayerId() {
-  return 'player_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  return 'player_' + Date.now() + '_' + Math.random().toString(36).slice(2, 11);
 }
 
 // Create a new deck of cards
@@ -230,11 +230,6 @@ async function joinGame(gameCode, playerName) {
       return game;
     });
     
-    const playerId = Object.keys(result.snapshot.val().players).find(
-      pid => result.snapshot.val().players[pid].name === playerName && 
-             result.snapshot.val().players[pid].lastSeen === result.snapshot.val().players[pid].lastSeen
-    );
-    
     // Find the player ID we just created (it's the newest one)
     const players = result.snapshot.val().players;
     const newPlayerId = Object.keys(players).find(pid => {
@@ -302,8 +297,8 @@ function calculateMorale(luxury, food) {
 
 // Calculate Population
 function calculatePopulation(luxury, food, morale, military) {
-  const moraleDiv = (morale / 10) + 1;
-  return Math.floor((luxury * Math.sqrt(food)) / moraleDiv) + military;
+  const moraleDivisor = Math.max(1, (morale / 10) + 1); // Ensure divisor is at least 1
+  return Math.floor((luxury * Math.sqrt(food)) / moraleDivisor) + military;
 }
 
 // Perform Upkeep Phase
