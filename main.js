@@ -1,5 +1,5 @@
 // ============================================================================
-// Civilization Online - Phase 1: Lobby & Setup
+// Civilization Online - Complete Implementation (Phases 2-5)
 // ============================================================================
 
 // Firebase Modular SDK Imports (v9+)
@@ -22,6 +22,122 @@ import {
 
 const CREATOR_KEY = "BeforeRoboticsGame";
 const GAME_CODE_LENGTH = 5;
+const MAX_PLAYERS = 6;
+const HAND_LIMIT = 10;
+const FARM_FOOD_PRODUCTION = 20;
+
+// Game phases in order
+const PHASES = [
+  'SETUP',
+  'UPKEEP',
+  'INTERNAL_PRESSURE',
+  'STATE_ACTIONS',
+  'WAR',
+  'REBELLION',
+  'NATURAL_EVENTS',
+  'CLEANUP'
+];
+
+// Card values
+const CARD_VALUES = {
+  'A': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10,
+  'J': 10, 'Q': 10, 'K': 10
+};
+
+// Action costs
+const COSTS = {
+  CARD: 2,
+  FARM: 5,
+  LUXURY: 1
+};
+
+// ============================================================================
+// Firebase Initialization
+// ============================================================================
+
+// ============================================================================
+// Game Logic Helper Functions
+// ============================================================================
+
+// Generate a standard 52-card deck for a player
+function generateDeck() {
+  const suits = ['♥', '♦', '♣', '♠'];
+  const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+  const deck = [];
+  
+  for (const suit of suits) {
+    for (const rank of ranks) {
+      const isRed = (suit === '♥' || suit === '♦');
+      deck.push({
+        rank: rank,
+        suit: suit,
+        type: isRed ? 'economy' : 'military',
+        value: CARD_VALUES[rank],
+        id: `${rank}${suit}`
+      });
+    }
+  }
+  
+  return shuffleArray(deck);
+}
+
+// Shuffle array using Fisher-Yates algorithm
+function shuffleArray(array) {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
+// Calculate economy value from hand
+function calculateEconomy(hand) {
+  if (!hand) return 0;
+  return hand.filter(card => card.type === 'economy').reduce((sum, card) => sum + card.value, 0);
+}
+
+// Calculate military value from hand
+function calculateMilitary(hand) {
+  if (!hand) return 0;
+  return hand.filter(card => card.type === 'military').reduce((sum, card) => sum + card.value, 0);
+}
+
+// Calculate morale
+function calculateMorale(luxury, food) {
+  return Math.floor(luxury + food / 2);
+}
+
+// Calculate population
+function calculatePopulation(luxury, food, morale, military) {
+  if (food === 0) return military;
+  const moraleModifier = (morale / 10) + 1;
+  const basePopulation = Math.floor((luxury * Math.sqrt(food)) / moraleModifier);
+  return basePopulation + military;
+}
+
+// Calculate population pressure unrest
+function getPopulationPressureUnrest(population) {
+  if (population >= 100) return 10;
+  if (population >= 75) return 7;
+  if (population >= 50) return 4;
+  if (population >= 30) return 2;
+  return 0;
+}
+
+// Virtual dice roll (1-6)
+function rollDie() {
+  return Math.floor(Math.random() * 6) + 1;
+}
+
+// Roll multiple dice
+function rollDice(count) {
+  const results = [];
+  for (let i = 0; i < count; i++) {
+    results.push(rollDie());
+  }
+  return results;
+}
 
 // ============================================================================
 // Firebase Initialization
@@ -69,6 +185,7 @@ let gameListener = null;
 const welcomeScreen = document.getElementById('welcomeScreen');
 const lobbyScreen = document.getElementById('lobbyScreen');
 const loadingScreen = document.getElementById('loadingScreen');
+const gameScreen = document.getElementById('gameScreen');
 
 const joinGameCodeInput = document.getElementById('joinGameCode');
 const joinPlayerNameInput = document.getElementById('joinPlayerName');
@@ -88,6 +205,31 @@ const hostControls = document.getElementById('hostControls');
 const startGameBtn = document.getElementById('startGameBtn');
 const leaveGameBtn = document.getElementById('leaveGameBtn');
 
+// Game screen elements
+const gamePhase = document.getElementById('gamePhase');
+const gameRound = document.getElementById('gameRound');
+const playerDashboardName = document.getElementById('playerDashboardName');
+const statUnrest = document.getElementById('statUnrest');
+const statEconomy = document.getElementById('statEconomy');
+const statMilitary = document.getElementById('statMilitary');
+const statFood = document.getElementById('statFood');
+const statLuxury = document.getElementById('statLuxury');
+const statMorale = document.getElementById('statMorale');
+const statPopulation = document.getElementById('statPopulation');
+const statFarms = document.getElementById('statFarms');
+const handDisplay = document.getElementById('handDisplay');
+const handCount = document.getElementById('handCount');
+const actionsPanel = document.getElementById('actionsPanel');
+const actionHint = document.getElementById('actionHint');
+const actionBuyCard = document.getElementById('actionBuyCard');
+const actionBuyFarm = document.getElementById('actionBuyFarm');
+const actionBuyLuxury = document.getElementById('actionBuyLuxury');
+const actionReduceUnrest = document.getElementById('actionReduceUnrest');
+const gameHostControls = document.getElementById('gameHostControls');
+const btnAdvancePhase = document.getElementById('btnAdvancePhase');
+const otherPlayersList = document.getElementById('otherPlayersList');
+const leaveGameBtn2 = document.getElementById('leaveGameBtn2');
+
 // ============================================================================
 // Initialization
 // ============================================================================
@@ -103,6 +245,42 @@ function initializeEventListeners() {
   copyCodeBtn.addEventListener('click', handleCopyCode);
   startGameBtn.addEventListener('click', handleStartGame);
   leaveGameBtn.addEventListener('click', handleLeaveGame);
+  leaveGameBtn2.addEventListener('click', handleLeaveGame);
+  
+  // Action buttons
+  actionBuyCard.addEventListener('click', async () => {
+    const result = await buyCard();
+    if (!result.success) {
+      alert(result.error);
+    }
+  });
+  
+  actionBuyFarm.addEventListener('click', async () => {
+    const result = await buyFarm();
+    if (!result.success) {
+      alert(result.error);
+    }
+  });
+  
+  actionBuyLuxury.addEventListener('click', async () => {
+    const amount = prompt('How much luxury to buy? (1 economy per die roll)');
+    if (amount && !isNaN(amount) && amount > 0) {
+      const result = await buyLuxury(parseInt(amount));
+      if (!result.success) {
+        alert(result.error);
+      }
+    }
+  });
+  
+  actionReduceUnrest.addEventListener('click', async () => {
+    const result = await reduceUnrest();
+    if (!result.success) {
+      alert(result.error);
+    }
+  });
+  
+  // Host advance phase
+  btnAdvancePhase.addEventListener('click', advancePhase);
   
   // Allow Enter key in inputs
   joinGameCodeInput.addEventListener('keypress', (e) => {
@@ -153,7 +331,13 @@ function attemptReconnect() {
           
           // Start listening to game
           listenToGame();
-          showScreen('lobby');
+          
+          // Show appropriate screen based on game state
+          if (gameData.locked && gameData.phase !== 'SETUP') {
+            showScreen('game');
+          } else {
+            showScreen('lobby');
+          }
         } else {
           // Player no longer in game, clear saved data
           clearSavedGame();
@@ -205,7 +389,10 @@ async function handleCreateGame() {
       locked: false,
       hostId: playerId,
       turnOrder: [playerId],
+      currentTurnIndex: 0,
       round: 0,
+      naturalEventsEnabled: true,  // Can be toggled in setup
+      maxPlayers: MAX_PLAYERS,
       meta: {
         createdAt: serverTimestamp()
       },
@@ -273,6 +460,12 @@ async function handleJoinGame() {
       if (gameData.locked) {
         // Game already started
         return;
+      }
+      
+      // Check max players
+      const playerCount = Object.keys(gameData.players || {}).length;
+      if (playerCount >= (gameData.maxPlayers || MAX_PLAYERS)) {
+        throw new Error('Game is full');
       }
       
       // Add player
@@ -344,7 +537,15 @@ function listenToGame() {
     }
     
     const gameData = snapshot.val();
-    updateLobbyUI(gameData);
+    
+    // Show appropriate screen
+    if (gameData.locked && gameData.phase !== 'SETUP') {
+      showScreen('game');
+      updateGameUI(gameData);
+    } else {
+      showScreen('lobby');
+      updateLobbyUI(gameData);
+    }
   });
 }
 
@@ -353,6 +554,13 @@ function listenToGame() {
 // ============================================================================
 
 function updateLobbyUI(gameData) {
+  // If game has started, show game screen instead
+  if (gameData.locked && gameData.phase !== 'SETUP') {
+    showScreen('game');
+    updateGameUI(gameData);
+    return;
+  }
+  
   // Update game code display
   displayGameCode.textContent = currentGameCode;
   
@@ -375,6 +583,116 @@ function updateLobbyUI(gameData) {
     hostControls.classList.remove('hidden');
   } else {
     hostControls.classList.add('hidden');
+  }
+}
+
+function updateGameUI(gameData) {
+  // Update phase and round
+  gamePhase.textContent = gameData.phase || 'SETUP';
+  gameRound.textContent = gameData.round || '1';
+  
+  // Get current player data
+  const player = gameData.players[currentPlayerId];
+  if (!player) return;
+  
+  // Update dashboard
+  playerDashboardName.textContent = player.name || 'Your Civilization';
+  statUnrest.textContent = player.stats.unrest || 0;
+  statEconomy.textContent = player.stats.economy || 0;
+  statMilitary.textContent = player.stats.military || 0;
+  statFood.textContent = player.stats.food || 0;
+  statLuxury.textContent = player.stats.luxury || 0;
+  statMorale.textContent = player.stats.morale || 0;
+  statPopulation.textContent = player.stats.population || 0;
+  statFarms.textContent = player.farms || 0;
+  
+  // Update hand
+  updateHandDisplay(player.hand);
+  
+  // Update action buttons based on phase
+  updateActionButtons(gameData.phase, player);
+  
+  // Show host controls if host
+  if (isHost) {
+    gameHostControls.classList.remove('hidden');
+  } else {
+    gameHostControls.classList.add('hidden');
+  }
+  
+  // Update other players
+  updateOtherPlayersList(gameData.players);
+}
+
+function updateHandDisplay(hand) {
+  if (!hand || hand.length === 0) {
+    handDisplay.innerHTML = '<p class="hint">No cards in hand</p>';
+    handCount.textContent = '0';
+    return;
+  }
+  
+  handCount.textContent = hand.length;
+  handDisplay.innerHTML = '';
+  
+  hand.forEach(card => {
+    const cardDiv = document.createElement('div');
+    cardDiv.className = `card ${card.type}`;
+    cardDiv.innerHTML = `
+      <div class="card-rank">${card.rank}</div>
+      <div class="card-suit">${card.suit}</div>
+      <div class="card-value">${card.value}</div>
+    `;
+    handDisplay.appendChild(cardDiv);
+  });
+}
+
+function updateActionButtons(phase, player) {
+  const isStateActions = phase === 'STATE_ACTIONS';
+  
+  // Enable/disable action buttons
+  actionBuyCard.disabled = !isStateActions || player.actionsThisRound.economic;
+  actionBuyFarm.disabled = !isStateActions || player.actionsThisRound.economic;
+  actionBuyLuxury.disabled = !isStateActions || player.actionsThisRound.economic || player.stats.unrest >= 50;
+  actionReduceUnrest.disabled = !isStateActions || player.actionsThisRound.domestic;
+  
+  // Update hint
+  if (isStateActions) {
+    actionHint.textContent = 'Take your actions for this round';
+  } else {
+    actionHint.textContent = `Actions available in STATE_ACTIONS phase (currently ${phase})`;
+  }
+}
+
+function updateOtherPlayersList(players) {
+  if (!players) {
+    otherPlayersList.innerHTML = '<p class="hint">No other players</p>';
+    return;
+  }
+  
+  otherPlayersList.innerHTML = '';
+  
+  Object.entries(players).forEach(([playerId, playerData]) => {
+    if (playerId === currentPlayerId) return; // Skip current player
+    
+    const playerDiv = document.createElement('div');
+    playerDiv.className = 'player-item';
+    
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'player-name';
+    nameSpan.textContent = playerData.name || 'Unknown Player';
+    
+    const statsSpan = document.createElement('span');
+    statsSpan.className = 'player-stats';
+    statsSpan.textContent = `Unrest: ${playerData.stats.unrest} | Pop: ${playerData.stats.population}`;
+    statsSpan.style.fontSize = '0.8rem';
+    statsSpan.style.color = '#aaa';
+    
+    playerDiv.appendChild(nameSpan);
+    playerDiv.appendChild(statsSpan);
+    otherPlayersList.appendChild(playerDiv);
+  });
+  
+  if (otherPlayersList.children.length === 0) {
+    otherPlayersList.innerHTML = '<p class="hint">No other players</p>';
   }
 }
 
@@ -441,8 +759,15 @@ async function handleStartGame() {
       
       // Lock the game and advance to first phase
       gameData.locked = true;
-      gameData.phase = 'UPKEEP'; // First gameplay phase
+      gameData.phase = 'UPKEEP';
       gameData.round = 1;
+      
+      // Initialize stats for all players based on their starting hands
+      Object.keys(gameData.players).forEach(playerId => {
+        const player = gameData.players[playerId];
+        player.stats.economy = calculateEconomy(player.hand);
+        player.stats.military = calculateMilitary(player.hand);
+      });
       
       return gameData;
     });
@@ -532,6 +857,14 @@ function generatePlayerId() {
 }
 
 function createPlayerData(name) {
+  const deck = generateDeck();
+  const initialHand = deck.slice(0, 4);
+  const remainingDeck = deck.slice(4);
+  
+  // Draw 2 emergency cards (face down, unknown)
+  const emergencyCards = remainingDeck.slice(0, 2);
+  const finalDeck = remainingDeck.slice(2);
+  
   return {
     name: name,
     stats: {
@@ -543,9 +876,25 @@ function createPlayerData(name) {
       morale: 0,
       population: 0
     },
-    hand: [],
-    emergencyCards: [],
+    hand: initialHand,
+    deck: finalDeck,
+    discard: [],
+    emergencyCards: emergencyCards.map(card => ({ ...card, faceDown: true })),
     farms: 0,
+    warTracks: {},  // { opponentId: trackValue }
+    siegedBy: null,
+    occupiedBy: null,
+    occupying: [],  // List of player IDs this player is occupying
+    rebellionTrack: null,  // null = no rebellion, number = rebellion stage
+    actionsThisRound: {
+      economic: false,
+      military: false,
+      domestic: false,
+      diplomatic: false,
+      emergency: false
+    },
+    tradeOffersReceived: [],
+    tradeOffersSent: [],
     lastSeen: serverTimestamp()
   };
 }
@@ -554,6 +903,7 @@ function showScreen(screenName) {
   welcomeScreen.classList.add('hidden');
   lobbyScreen.classList.add('hidden');
   loadingScreen.classList.add('hidden');
+  gameScreen.classList.add('hidden');
   
   switch(screenName) {
     case 'welcome':
@@ -564,6 +914,9 @@ function showScreen(screenName) {
       break;
     case 'loading':
       loadingScreen.classList.remove('hidden');
+      break;
+    case 'game':
+      gameScreen.classList.remove('hidden');
       break;
   }
 }
@@ -581,11 +934,359 @@ function clearSavedGame() {
 }
 
 // ============================================================================
+// Game Phase Processing
+// ============================================================================
+
+// Process UPKEEP phase (automatic calculations)
+async function processUpkeepPhase() {
+  if (!isHost || !currentGameCode) return;
+  
+  const gameRef = ref(database, `games/${currentGameCode}`);
+  
+  await runTransaction(gameRef, (gameData) => {
+    if (!gameData || gameData.phase !== 'UPKEEP') return;
+    
+    Object.keys(gameData.players).forEach(playerId => {
+      const player = gameData.players[playerId];
+      
+      // 1. Food Production
+      const farmProduction = player.siegedBy ? 0 : player.farms * FARM_FOOD_PRODUCTION;
+      player.stats.food += farmProduction;
+      
+      // 2. Morale Calculation
+      player.stats.morale = calculateMorale(player.stats.luxury, player.stats.food);
+      
+      // 3. Population Calculation
+      player.stats.population = calculatePopulation(
+        player.stats.luxury,
+        player.stats.food,
+        player.stats.morale,
+        player.stats.military
+      );
+      
+      // 4. Population Pressure Unrest
+      const pressureUnrest = getPopulationPressureUnrest(player.stats.population);
+      player.stats.unrest += pressureUnrest;
+    });
+    
+    return gameData;
+  });
+}
+
+// Process INTERNAL_PRESSURE phase (automatic penalties)
+async function processInternalPressurePhase() {
+  if (!isHost || !currentGameCode) return;
+  
+  const gameRef = ref(database, `games/${currentGameCode}`);
+  
+  await runTransaction(gameRef, (gameData) => {
+    if (!gameData || gameData.phase !== 'INTERNAL_PRESSURE') return;
+    
+    Object.keys(gameData.players).forEach(playerId => {
+      const player = gameData.players[playerId];
+      
+      // Food Stress
+      const pop = player.stats.population;
+      const food = player.stats.food;
+      if (food < pop * 4) {
+        player.stats.unrest += 10;
+      } else if (food < pop * 2) {
+        player.stats.unrest += 5;
+      }
+      
+      // Siege Pressure
+      if (player.siegedBy) {
+        player.stats.unrest += 8;
+      }
+      
+      // Economic Collapse Pressure
+      if (player.stats.economy === 0) {
+        player.stats.unrest += 10;
+      }
+      
+      // Trigger rebellion if unrest >= 100
+      if (player.stats.unrest >= 100 && player.rebellionTrack === null) {
+        player.rebellionTrack = 2;  // Start at stage 2
+      }
+    });
+    
+    return gameData;
+  });
+}
+
+// Advance to next phase (host only)
+async function advancePhase() {
+  if (!isHost || !currentGameCode) return;
+  
+  const gameRef = ref(database, `games/${currentGameCode}`);
+  
+  await runTransaction(gameRef, (gameData) => {
+    if (!gameData) return;
+    
+    const currentPhaseIndex = PHASES.indexOf(gameData.phase);
+    
+    // Auto-process certain phases before advancing
+    if (gameData.phase === 'UPKEEP') {
+      // Already processed
+    } else if (gameData.phase === 'INTERNAL_PRESSURE') {
+      // Already processed
+    } else if (gameData.phase === 'CLEANUP') {
+      // Reset action flags for next round
+      Object.keys(gameData.players).forEach(playerId => {
+        gameData.players[playerId].actionsThisRound = {
+          economic: false,
+          military: false,
+          domestic: false,
+          diplomatic: false,
+          emergency: false
+        };
+      });
+    }
+    
+    // Move to next phase
+    if (currentPhaseIndex < PHASES.length - 1) {
+      gameData.phase = PHASES[currentPhaseIndex + 1];
+    } else {
+      // End of round, go back to UPKEEP and increment round
+      gameData.phase = 'UPKEEP';
+      gameData.round += 1;
+    }
+    
+    // Auto-advance turn index for turn-based phases
+    if (gameData.phase === 'STATE_ACTIONS' || gameData.phase === 'WAR') {
+      gameData.currentTurnIndex = 0;
+    }
+    
+    return gameData;
+  });
+  
+  // Auto-process new phase if needed
+  const snapshot = await get(gameRef);
+  if (snapshot.exists()) {
+    const gameData = snapshot.val();
+    if (gameData.phase === 'UPKEEP') {
+      await processUpkeepPhase();
+    } else if (gameData.phase === 'INTERNAL_PRESSURE') {
+      await processInternalPressurePhase();
+    }
+  }
+}
+
+// ============================================================================
+// Player Actions
+// ============================================================================
+
+// Buy a card (STATE_ACTIONS phase)
+async function buyCard() {
+  if (!currentGameCode || !currentPlayerId) return;
+  
+  const gameRef = ref(database, `games/${currentGameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (gameData) => {
+      if (!gameData || gameData.phase !== 'STATE_ACTIONS') {
+        throw new Error('Not in STATE_ACTIONS phase');
+      }
+      
+      const player = gameData.players[currentPlayerId];
+      
+      // Validations
+      if (player.actionsThisRound.economic) {
+        throw new Error('Already performed economic action this round');
+      }
+      
+      if (player.stats.economy < COSTS.CARD) {
+        throw new Error('Not enough economy');
+      }
+      
+      if (player.hand.length >= HAND_LIMIT) {
+        throw new Error('Hand is full');
+      }
+      
+      if (player.deck.length === 0) {
+        throw new Error('Deck is empty');
+      }
+      
+      // Draw card and update stats
+      const drawnCard = player.deck.shift();
+      player.hand.push(drawnCard);
+      player.actionsThisRound.economic = true;
+      
+      // Recalculate economy/military
+      player.stats.economy = calculateEconomy(player.hand);
+      player.stats.military = calculateMilitary(player.hand);
+      
+      return gameData;
+    });
+    
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// Buy a farm (STATE_ACTIONS phase)
+async function buyFarm() {
+  if (!currentGameCode || !currentPlayerId) return;
+  
+  const gameRef = ref(database, `games/${currentGameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (gameData) => {
+      if (!gameData || gameData.phase !== 'STATE_ACTIONS') {
+        throw new Error('Not in STATE_ACTIONS phase');
+      }
+      
+      const player = gameData.players[currentPlayerId];
+      
+      // Validations
+      if (player.actionsThisRound.economic) {
+        throw new Error('Already performed economic action this round');
+      }
+      
+      if (player.stats.economy < COSTS.FARM) {
+        throw new Error('Not enough economy');
+      }
+      
+      // Buy farm
+      player.farms += 1;
+      player.actionsThisRound.economic = true;
+      
+      return gameData;
+    });
+    
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// Buy luxury (STATE_ACTIONS phase)
+async function buyLuxury(amount) {
+  if (!currentGameCode || !currentPlayerId) return;
+  
+  const gameRef = ref(database, `games/${currentGameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (gameData) => {
+      if (!gameData || gameData.phase !== 'STATE_ACTIONS') {
+        throw new Error('Not in STATE_ACTIONS phase');
+      }
+      
+      const player = gameData.players[currentPlayerId];
+      
+      // Validations
+      if (player.actionsThisRound.economic) {
+        throw new Error('Already performed economic action this round');
+      }
+      
+      if (player.stats.unrest >= 50) {
+        throw new Error('Cannot buy luxury with 50+ unrest');
+      }
+      
+      const cost = amount * COSTS.LUXURY;
+      if (player.stats.economy < cost) {
+        throw new Error('Not enough economy');
+      }
+      
+      // Roll dice for luxury
+      const diceResults = rollDice(amount);
+      const luxuryGained = diceResults.reduce((sum, val) => sum + val, 0);
+      
+      player.stats.luxury += luxuryGained;
+      player.actionsThisRound.economic = true;
+      
+      return gameData;
+    });
+    
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// Reduce unrest (domestic action)
+async function reduceUnrest() {
+  if (!currentGameCode || !currentPlayerId) return;
+  
+  const gameRef = ref(database, `games/${currentGameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (gameData) => {
+      if (!gameData || gameData.phase !== 'STATE_ACTIONS') {
+        throw new Error('Not in STATE_ACTIONS phase');
+      }
+      
+      const player = gameData.players[currentPlayerId];
+      
+      // Validations
+      if (player.actionsThisRound.domestic) {
+        throw new Error('Already performed domestic action this round');
+      }
+      
+      // Reduce unrest by 10
+      player.stats.unrest = Math.max(0, player.stats.unrest - 10);
+      player.actionsThisRound.domestic = true;
+      
+      return gameData;
+    });
+    
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// Discard cards (CLEANUP phase)
+async function discardCards(cardIds) {
+  if (!currentGameCode || !currentPlayerId) return;
+  
+  const gameRef = ref(database, `games/${currentGameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (gameData) => {
+      if (!gameData || gameData.phase !== 'CLEANUP') {
+        throw new Error('Not in CLEANUP phase');
+      }
+      
+      const player = gameData.players[currentPlayerId];
+      
+      // Remove cards from hand and add to discard
+      player.hand = player.hand.filter(card => {
+        if (cardIds.includes(card.id)) {
+          player.discard.push(card);
+          return false;
+        }
+        return true;
+      });
+      
+      // Recalculate economy/military
+      player.stats.economy = calculateEconomy(player.hand);
+      player.stats.military = calculateMilitary(player.hand);
+      
+      return gameData;
+    });
+    
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// ============================================================================
 // Exports (for potential future use)
 // ============================================================================
 
 window.civilizationGame = {
   currentGameCode: () => currentGameCode,
   currentPlayerId: () => currentPlayerId,
-  isHost: () => isHost
+  isHost: () => isHost,
+  // Phase management
+  advancePhase,
+  // Player actions
+  buyCard,
+  buyFarm,
+  buyLuxury,
+  reduceUnrest,
+  discardCards
 };
