@@ -614,17 +614,6 @@ function updateWarModal() {
   }
 }
 
-// Update Trade Modal
-function updateTradeModal() {
-  if (!currentGame) return;
-  
-  const playerId = getCurrentPlayerId();
-  if (!playerId) return;
-  
-  // Update target select
-  const targetSelect = document.getElementById('tradeTargetSelect');
-}
-
 // Make trade functions available globally for onclick handlers
 window.acceptTrade = (tradeId) => {
   acceptTradeOffer(tradeId);
