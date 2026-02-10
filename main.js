@@ -155,9 +155,18 @@ const firebaseConfig = window.__FIREBASE_CONFIG__ || {
 // Validate Firebase configuration
 function validateFirebaseConfig(config) {
   const requiredFields = ['apiKey', 'authDomain', 'databaseURL', 'projectId', 'storageBucket', 'appId'];
+  const placeholderPatterns = ['PLACEHOLDER', 'YOUR_', 'your-project'];
+  
   for (const field of requiredFields) {
-    if (!config[field] || config[field].includes('PLACEHOLDER')) {
+    if (!config[field]) {
       return false;
+    }
+    // Check if the field contains any placeholder patterns
+    const fieldValue = String(config[field]);
+    for (const pattern of placeholderPatterns) {
+      if (fieldValue.includes(pattern)) {
+        return false;
+      }
     }
   }
   return true;
@@ -1262,7 +1271,6 @@ async function advancePhase() {
   const gameRef = ref(database, `games/${currentGameCode}`);
   
   let gameOver = false;
-  let newPhase = null;
   
   const result = await runTransaction(gameRef, (gameData) => {
     if (!gameData) return;
