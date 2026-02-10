@@ -52,10 +52,6 @@ const COSTS = {
 };
 
 // ============================================================================
-// Firebase Initialization
-// ============================================================================
-
-// ============================================================================
 // Game Logic Helper Functions
 // ============================================================================
 
@@ -111,7 +107,7 @@ function calculateMorale(luxury, food) {
 // Calculate population
 function calculatePopulation(luxury, food, morale, military) {
   if (food === 0) return military;
-  const moraleModifier = (morale / 10) + 1;
+  const moraleModifier = Math.max((morale / 10) + 1, 1); // Ensure positive modifier
   const basePopulation = Math.floor((luxury * Math.sqrt(food)) / moraleModifier);
   return basePopulation + military;
 }
@@ -193,6 +189,7 @@ const joinBtn = document.getElementById('joinBtn');
 
 const creatorKeyInput = document.getElementById('creatorKey');
 const createPlayerNameInput = document.getElementById('createPlayerName');
+const naturalEventsToggle = document.getElementById('naturalEventsToggle');
 const createBtn = document.getElementById('createBtn');
 
 const displayGameCode = document.getElementById('displayGameCode');
@@ -294,17 +291,20 @@ function initializeEventListeners() {
   });
   
   actionBuyLuxury.addEventListener('click', async () => {
-    const amount = prompt('How much luxury to buy? (1 economy per die roll)');
-    if (amount && !isNaN(amount) && amount > 0) {
-      try {
-        const result = await buyLuxury(parseInt(amount));
-        if (!result.success) {
-          alert(`❌ ${result.error}`);
-        } else {
-          alert('✅ Luxury purchased!');
+    const amountStr = prompt('How much luxury to buy? (1 economy per die roll)');
+    if (amountStr && !isNaN(amountStr)) {
+      const amount = parseInt(amountStr);
+      if (amount > 0) {
+        try {
+          const result = await buyLuxury(amount);
+          if (!result.success) {
+            alert(`❌ ${result.error}`);
+          } else {
+            alert('✅ Luxury purchased!');
+          }
+        } catch (error) {
+          alert(`❌ Error: ${error.message}`);
         }
-      } catch (error) {
-        alert(`❌ Error: ${error.message}`);
       }
     }
   });
@@ -498,7 +498,7 @@ async function handleCreateGame() {
       turnOrder: [playerId],
       currentTurnIndex: 0,
       round: 0,
-      naturalEventsEnabled: true,  // Can be toggled in setup
+      naturalEventsEnabled: naturalEventsToggle.checked,
       maxPlayers: MAX_PLAYERS,
       meta: {
         createdAt: serverTimestamp()
@@ -1124,7 +1124,19 @@ async function processUpkeepPhase() {
       const player = gameData.players[playerId];
       
       // 1. Food Production
-      const farmProduction = player.siegedBy ? 0 : player.farms * FARM_FOOD_PRODUCTION;
+      let farmProduction = player.farms * FARM_FOOD_PRODUCTION;
+      
+      // Check for drought effect
+      if (player.droughtNextRound) {
+        farmProduction = Math.floor(farmProduction / 2);
+        player.droughtNextRound = false; // Consume the flag
+      }
+      
+      // Check for siege
+      if (player.siegedBy) {
+        farmProduction = 0;
+      }
+      
       player.stats.food += farmProduction;
       
       // 2. Morale Calculation
@@ -1194,12 +1206,14 @@ async function advancePhase() {
   
   const gameRef = ref(database, `games/${currentGameCode}`);
   
+  let gameOver = false;
+  
   await runTransaction(gameRef, (gameData) => {
     if (!gameData) return;
     
     // Check for game over
     if (gameData.gameOver) {
-      alert('Game is over!');
+      gameOver = true;
       return;
     }
     
@@ -1242,6 +1256,12 @@ async function advancePhase() {
     
     return gameData;
   });
+  
+  // Alert outside transaction
+  if (gameOver) {
+    alert('Game is over!');
+    return;
+  }
   
   // Auto-process new phase if needed
   const snapshot = await get(gameRef);
@@ -1448,6 +1468,15 @@ async function processRebellion(playerId) {
       if (player.siegedBy) rebellionDice += 1;
       if (player.stats.food < player.stats.population * 2) rebellionDice += 1;
       
+      // Check war track >= 5 for any opponent
+      let highWarTrack = false;
+      if (player.warTracks) {
+        Object.values(player.warTracks).forEach(track => {
+          if (track >= 5) highWarTrack = true;
+        });
+      }
+      if (highWarTrack) rebellionDice += 1;
+      
       // Calculate government dice pool
       let govDice = 2;
       govDice += Math.floor(player.stats.military / 20);
@@ -1525,9 +1554,8 @@ async function applyNaturalEvent() {
       const playerIds = Object.keys(gameData.players);
       if (playerIds.length === 0) return gameData;
       
-      // Roll to pick affected player
-      const playerRoll = rollDie();
-      const affectedPlayerId = playerIds[playerRoll % playerIds.length];
+      // Roll to pick affected player (unbiased)
+      const affectedPlayerId = playerIds[Math.floor(Math.random() * playerIds.length)];
       const player = gameData.players[affectedPlayerId];
       
       // Roll for event category
@@ -1850,6 +1878,20 @@ async function acceptTradeOffer(tradeId) {
       }
       
       const sender = gameData.players[offer.from];
+      
+      // Validate sender has sufficient resources
+      if (sender.stats.economy < (offer.offering.economy || 0) ||
+          sender.stats.food < (offer.offering.food || 0) ||
+          sender.stats.luxury < (offer.offering.luxury || 0)) {
+        throw new Error('Sender no longer has sufficient resources');
+      }
+      
+      // Validate receiver has sufficient resources
+      if (player.stats.economy < (offer.requesting.economy || 0) ||
+          player.stats.food < (offer.requesting.food || 0) ||
+          player.stats.luxury < (offer.requesting.luxury || 0)) {
+        throw new Error('You do not have sufficient resources');
+      }
       
       // Execute trade
       // Transfer resources from sender to receiver

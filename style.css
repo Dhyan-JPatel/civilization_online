@@ -372,7 +372,7 @@ button:disabled, .btn:disabled {
   margin: 20px 0;
   text-align: center;
   border: 3px solid #ffd700;
-  animation: pulse 2s infinite;
+  animation: pulse 2s ease-in-out 3;
 }
 
 .victory-banner h2 {
