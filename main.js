@@ -12,6 +12,10 @@ import {
   buyLuxury,
   reduceUnrest,
   declareWar,
+  sendTradeOffer,
+  acceptTradeOffer,
+  rejectTradeOffer,
+  foreignInterference,
   listenToGameState,
   stopListeningToGameState,
   leaveGame,
@@ -99,6 +103,7 @@ function setupEventListeners() {
   document.getElementById('closeTradeModal').addEventListener('click', hideTradeModal);
   document.getElementById('closeRebellionModal').addEventListener('click', hideRebellionModal);
   document.getElementById('btnDeclareWar').addEventListener('click', handleDeclareWar);
+  document.getElementById('btnSendTrade').addEventListener('click', handleSendTrade);
 }
 
 // Handle Create Game
@@ -207,6 +212,49 @@ function handleDeclareWar() {
   
   declareWar(targetId);
   hideWarModal();
+}
+
+// Handle Send Trade
+function handleSendTrade() {
+  const targetId = document.getElementById('tradeTargetSelect').value;
+  if (!targetId) {
+    alert('❌ Please select a player');
+    return;
+  }
+  
+  const offer = {
+    economy: parseInt(document.getElementById('offerEconomy').value) || 0,
+    food: parseInt(document.getElementById('offerFood').value) || 0,
+    luxury: parseInt(document.getElementById('offerLuxury').value) || 0
+  };
+  
+  const request = {
+    economy: parseInt(document.getElementById('requestEconomy').value) || 0,
+    food: parseInt(document.getElementById('requestFood').value) || 0,
+    luxury: parseInt(document.getElementById('requestLuxury').value) || 0
+  };
+  
+  if (offer.economy === 0 && offer.food === 0 && offer.luxury === 0) {
+    alert('❌ You must offer something');
+    return;
+  }
+  
+  if (request.economy === 0 && request.food === 0 && request.luxury === 0) {
+    alert('❌ You must request something');
+    return;
+  }
+  
+  sendTradeOffer(targetId, offer, request);
+  
+  // Clear inputs
+  document.getElementById('offerEconomy').value = '';
+  document.getElementById('offerFood').value = '';
+  document.getElementById('offerLuxury').value = '';
+  document.getElementById('requestEconomy').value = '';
+  document.getElementById('requestFood').value = '';
+  document.getElementById('requestLuxury').value = '';
+  
+  hideTradeModal();
 }
 
 // Show/Hide Screens
@@ -433,10 +481,40 @@ function updateTradeModal() {
     }
   });
   
-  // Update received trades (simplified - full implementation would need more DB structure)
+  // Update received trades
   const tradesList = document.getElementById('receivedTradesList');
-  tradesList.innerHTML = '<p class="hint">No trade offers</p>';
+  tradesList.innerHTML = '';
+  
+  const pendingTrades = Object.values(currentGame.tradeOffers || {}).filter(
+    trade => trade.toId === playerId && trade.status === 'pending'
+  );
+  
+  if (pendingTrades.length === 0) {
+    tradesList.innerHTML = '<p class="hint">No trade offers</p>';
+  } else {
+    pendingTrades.forEach(trade => {
+      const tradeDiv = document.createElement('div');
+      tradeDiv.className = 'trade-offer';
+      tradeDiv.innerHTML = `
+        <p><strong>From ${trade.fromName}:</strong></p>
+        <p>Offers: ${trade.offer.food ? `${trade.offer.food} Food ` : ''}${trade.offer.luxury ? `${trade.offer.luxury} Luxury ` : ''}${trade.offer.economy ? `${trade.offer.economy} Economy ` : ''}</p>
+        <p>Requests: ${trade.request.food ? `${trade.request.food} Food ` : ''}${trade.request.luxury ? `${trade.request.luxury} Luxury ` : ''}${trade.request.economy ? `${trade.request.economy} Economy ` : ''}</p>
+        <button class="btn btn-success" onclick="window.acceptTrade('${trade.id}')">Accept</button>
+        <button class="btn btn-danger" onclick="window.rejectTrade('${trade.id}')">Reject</button>
+      `;
+      tradesList.appendChild(tradeDiv);
+    });
+  }
 }
+
+// Make trade functions available globally for onclick handlers
+window.acceptTrade = (tradeId) => {
+  acceptTradeOffer(tradeId);
+};
+
+window.rejectTrade = (tradeId) => {
+  rejectTradeOffer(tradeId);
+};
 
 // Update Rebellion Modal
 function updateRebellionModal() {
