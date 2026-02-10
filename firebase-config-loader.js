@@ -34,5 +34,15 @@
             messagingSenderId: "YOUR_SENDER_ID",
             appId: "YOUR_APP_ID"
         };
+        
+        // Log a warning if placeholder values are detected
+        const hasPlaceholders = Object.values(window.__FIREBASE_CONFIG__).some(value => 
+            typeof value === 'string' && (value.includes('YOUR_') || value.includes('your-project'))
+        );
+        
+        if (hasPlaceholders) {
+            console.warn('⚠️ Firebase configuration contains placeholder values. The application will not work until you configure it with your actual Firebase project settings.');
+            console.warn('See DEPLOYMENT.md for instructions on how to configure Firebase.');
+        }
     }
 })();

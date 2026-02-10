@@ -1,0 +1,46 @@
+{
+  "name": "civilization-online",
+  "version": "1.0.0",
+  "description": "Online multiplayer strategy game - Build your empire without letting it collapse",
+  "main": "main.js",
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "serve": "python3 -m http.server 8080"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Dhyan-JPatel/civilization_online.git"
+  },
+  "keywords": [
+    "game",
+    "multiplayer",
+    "strategy",
+    "firebase",
+    "realtime"
+  ],
+  "author": "Dhyan-JPatel",
+  "license": "Apache-2.0",
+  "dependencies": {},
+  "devDependencies": {},
+  "externalDependencies": {
+    "firebase": {
+      "version": "10.7.1",
+      "source": "https://www.gstatic.com/firebasejs/10.7.1/",
+      "modules": [
+        "firebase-app.js",
+        "firebase-database.js"
+      ],
+      "type": "CDN",
+      "description": "Firebase Realtime Database SDK loaded via CDN"
+    }
+  },
+  "engines": {
+    "node": ">=14.0.0",
+    "python": ">=3.6"
+  },
+  "notes": {
+    "buildSystem": "None - Pure HTML/CSS/JavaScript application",
+    "deployment": "Static hosting (Firebase Hosting, Netlify, Vercel, or any static web server)",
+    "configuration": "Firebase credentials must be configured in firebase-config-loader.js before running"
+  }
+}
