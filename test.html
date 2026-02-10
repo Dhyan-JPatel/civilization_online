@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Civilization Online - Test Configuration</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    h1 { color: #333; }
+    .section {
+      margin: 30px 0;
+      padding: 20px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      background: #f9f9f9;
+    }
+    .status {
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 5px;
+    }
+    .success { background: #d4edda; color: #155724; }
+    .error { background: #f8d7da; color: #721c24; }
+    .warning { background: #fff3cd; color: #856404; }
+    button {
+      padding: 10px 20px;
+      margin: 5px;
+      cursor: pointer;
+      border: none;
+      border-radius: 5px;
+      background: #007bff;
+      color: white;
+      font-size: 16px;
+    }
+    button:hover { background: #0056b3; }
+    code {
+      background: #f4f4f4;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: monospace;
+    }
+    pre {
+      background: #f4f4f4;
+      padding: 15px;
+      border-radius: 5px;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎮 Civilization Online - Test Suite</h1>
+  
+  <div class="section">
+    <h2>Quick Start</h2>
+    <p>This page helps you test and verify the Civilization Online application is working correctly.</p>
+    <button onclick="runAllTests()">▶️ Run All Tests</button>
+    <button onclick="location.href='index.html'">🎮 Open Game</button>
+  </div>
+
+  <div class="section">
+    <h2>Test Results</h2>
+    <div id="testResults"></div>
+  </div>
+
+  <div class="section">
+    <h2>Configuration Check</h2>
+    <div id="configCheck"></div>
+    <button onclick="checkFirebaseConfig()">🔍 Check Firebase Config</button>
+  </div>
+
+  <div class="section">
+    <h2>File Integrity</h2>
+    <div id="fileCheck"></div>
+    <button onclick="checkFiles()">📁 Check Files</button>
+  </div>
+
+  <div class="section">
+    <h2>Manual Testing Guide</h2>
+    <ol>
+      <li><strong>Configure Firebase:</strong> Edit <code>firebase-config-loader.js</code> with your Firebase credentials</li>
+      <li><strong>Run Tests:</strong> Click "Run All Tests" above to verify everything works</li>
+      <li><strong>Test Locally:</strong>
+        <pre>python3 -m http.server 8080</pre>
+        Then open <a href="http://localhost:8080">http://localhost:8080</a>
+      </li>
+      <li><strong>Create Game:</strong> Use creator key: <code>BeforeRoboticsGame</code></li>
+      <li><strong>Join Game:</strong> Open another tab/browser and join with the game code</li>
+      <li><strong>Test Features:</strong> Follow the <a href="TESTING_GUIDE.md">Testing Guide</a></li>
+    </ol>
+  </div>
+
+  <script>
+    async function runAllTests() {
+      const resultsDiv = document.getElementById('testResults');
+      resultsDiv.innerHTML = '<p>Running tests...</p>';
+      
+      const tests = [];
+      
+      // Test 1: Check if files exist
+      tests.push(await testFileExists('main.js', 'Main JavaScript file'));
+      tests.push(await testFileExists('index.html', 'Main HTML file'));
+      tests.push(await testFileExists('style.css', 'Stylesheet'));
+      tests.push(await testFileExists('firebase-config-loader.js', 'Firebase config loader'));
+      tests.push(await testFileExists('package.json', 'Package.json'));
+      
+      // Test 2: Check if main.js has proper structure
+      tests.push(await testJavaScriptStructure());
+      
+      // Test 3: Check Firebase config
+      tests.push(await testFirebaseConfigStructure());
+      
+      // Display results
+      const passed = tests.filter(t => t.passed).length;
+      const total = tests.length;
+      
+      let html = `<div class="status ${passed === total ? 'success' : 'warning'}">`;
+      html += `<strong>Test Results: ${passed}/${total} passed</strong>`;
+      html += `</div>`;
+      
+      tests.forEach(test => {
+        html += `<div class="status ${test.passed ? 'success' : 'error'}">`;
+        html += `${test.passed ? '✅' : '❌'} ${test.name}: ${test.message}`;
+        html += `</div>`;
+      });
+      
+      resultsDiv.innerHTML = html;
+    }
+    
+    async function testFileExists(filename, description) {
+      try {
+        const response = await fetch(filename, { method: 'HEAD' });
+        return {
+          name: description,
+          passed: response.ok,
+          message: response.ok ? 'Found' : 'Not found'
+        };
+      } catch (error) {
+        return {
+          name: description,
+          passed: false,
+          message: `Error: ${error.message}`
+        };
+      }
+    }
+    
+    async function testJavaScriptStructure() {
+      try {
+        const response = await fetch('main.js');
+        const text = await response.text();
+        
+        const checks = [
+          { pattern: /async function advancePhase/, name: 'advancePhase function' },
+          { pattern: /validateFirebaseConfig/, name: 'Firebase config validation' },
+          { pattern: /firebaseInitialized/, name: 'Firebase initialization flag' },
+          { pattern: /addEventListener\('click', async/, name: 'Async error handling' }
+        ];
+        
+        const missing = checks.filter(check => !check.pattern.test(text));
+        
+        return {
+          name: 'JavaScript Structure',
+          passed: missing.length === 0,
+          message: missing.length === 0 
+            ? 'All required functions and patterns found' 
+            : `Missing: ${missing.map(m => m.name).join(', ')}`
+        };
+      } catch (error) {
+        return {
+          name: 'JavaScript Structure',
+          passed: false,
+          message: `Error: ${error.message}`
+        };
+      }
+    }
+    
+    async function testFirebaseConfigStructure() {
+      try {
+        const response = await fetch('firebase-config-loader.js');
+        const text = await response.text();
+        
+        const hasValidation = text.includes('hasPlaceholders');
+        const hasWarning = text.includes('console.warn');
+        
+        return {
+          name: 'Firebase Config Loader',
+          passed: hasValidation && hasWarning,
+          message: hasValidation && hasWarning 
+            ? 'Includes placeholder validation and warnings' 
+            : 'Missing validation or warning logic'
+        };
+      } catch (error) {
+        return {
+          name: 'Firebase Config Loader',
+          passed: false,
+          message: `Error: ${error.message}`
+        };
+      }
+    }
+    
+    function checkFirebaseConfig() {
+      const configDiv = document.getElementById('configCheck');
+      
+      // Load the firebase config script
+      const script = document.createElement('script');
+      script.src = 'firebase-config-loader.js';
+      script.onload = () => {
+        const config = window.__FIREBASE_CONFIG__;
+        
+        let html = '<h3>Firebase Configuration Status:</h3>';
+        
+        if (!config) {
+          html += '<div class="status error">❌ Configuration not loaded</div>';
+        } else {
+          const hasPlaceholders = Object.values(config).some(value => 
+            typeof value === 'string' && (
+              value.includes('YOUR_') || 
+              value.includes('your-project') ||
+              value.includes('PLACEHOLDER')
+            )
+          );
+          
+          if (hasPlaceholders) {
+            html += '<div class="status warning">⚠️ Configuration contains placeholder values</div>';
+            html += '<p>You need to edit <code>firebase-config-loader.js</code> with your actual Firebase credentials.</p>';
+            html += '<p>See <a href="DEPLOYMENT.md">DEPLOYMENT.md</a> for instructions.</p>';
+          } else {
+            html += '<div class="status success">✅ Configuration appears valid</div>';
+            html += '<p>Firebase project: <code>' + config.projectId + '</code></p>';
+          }
+          
+          html += '<h4>Configuration Fields:</h4><ul>';
+          Object.keys(config).forEach(key => {
+            const value = config[key];
+            const isPlaceholder = typeof value === 'string' && (
+              value.includes('YOUR_') || 
+              value.includes('your-project') ||
+              value.includes('PLACEHOLDER')
+            );
+            html += `<li>${key}: ${isPlaceholder ? '❌ Placeholder' : '✅ Set'}</li>`;
+          });
+          html += '</ul>';
+        }
+        
+        configDiv.innerHTML = html;
+      };
+      script.onerror = () => {
+        configDiv.innerHTML = '<div class="status error">❌ Failed to load firebase-config-loader.js</div>';
+      };
+      document.head.appendChild(script);
+    }
+    
+    async function checkFiles() {
+      const fileDiv = document.getElementById('fileCheck');
+      fileDiv.innerHTML = '<p>Checking files...</p>';
+      
+      const requiredFiles = [
+        'index.html',
+        'main.js',
+        'style.css',
+        'firebase-config-loader.js',
+        'package.json',
+        'README.md',
+        'DEPLOYMENT.md',
+        'TESTING_GUIDE.md',
+        'civilization_game_manual.txt'
+      ];
+      
+      let html = '<h3>File Integrity Check:</h3>';
+      
+      for (const file of requiredFiles) {
+        try {
+          const response = await fetch(file, { method: 'HEAD' });
+          html += `<div class="status ${response.ok ? 'success' : 'error'}">`;
+          html += `${response.ok ? '✅' : '❌'} ${file}`;
+          html += `</div>`;
+        } catch (error) {
+          html += `<div class="status error">❌ ${file} - Error: ${error.message}</div>`;
+        }
+      }
+      
+      fileDiv.innerHTML = html;
+    }
+    
+    // Auto-run tests on page load
+    window.addEventListener('load', () => {
+      runAllTests();
+      checkFirebaseConfig();
+    });
+  </script>
+</body>
+</html>

@@ -100,11 +100,22 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed setup and deployment instruction
 
 Quick start:
 1. Edit `firebase-config-loader.js` with your Firebase project configuration
-2. Open `index.html` in your browser (or use a local web server)
-3. Use creator key: `BeforeRoboticsGame` to create a game
-4. Open another tab to join as a second player
+2. Run a local web server: `python3 -m http.server 8080` or `npm start`
+3. Open `test.html` in your browser to verify setup
+4. Open `index.html` to start the game
+5. Use creator key: `BeforeRoboticsGame` to create a game
+6. Open another tab to join as a second player
 
 **Note**: For production deployment, configure `firebase-config-loader.js` to fetch configuration from a secure endpoint rather than embedding it directly.
+
+### Testing Your Setup
+
+1. **Run Automated Tests**: Open `test.html` in your browser to verify:
+   - All files are present
+   - JavaScript structure is correct
+   - Firebase configuration is valid
+   
+2. **Manual Testing**: See [TESTING_GUIDE.md](TESTING_GUIDE.md) for comprehensive testing procedures
 
 ### For Players
 
@@ -117,8 +128,9 @@ Quick start:
 
 - **Frontend**: Vanilla JavaScript (ES6+), HTML5, CSS3
 - **Database**: Firebase Realtime Database
-- **Firebase SDK**: Modular v10.7.1 (no compat mode)
+- **Firebase SDK**: Modular v10.7.1 (loaded via CDN)
 - **Hosting**: Static site (can be hosted on Firebase Hosting, Netlify, Vercel, etc.)
+- **Dependencies**: Documented in package.json (external CDN dependencies)
 
 ## Project Structure
 
@@ -128,6 +140,8 @@ civilization_online/
 ├── main.js                 # Application logic with modular Firebase
 ├── style.css               # Responsive mobile-first styles
 ├── firebase-config-loader.js  # Runtime configuration loader
+├── test.html               # Automated test page
+├── package.json            # Dependency documentation
 ├── civilization_game_manual.txt  # Complete game rules
 ├── DEPLOYMENT.md           # Setup and deployment guide
 ├── LICENSE                 # Apache 2.0 License
