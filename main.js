@@ -99,9 +99,9 @@ function calculateMilitary(hand) {
   return hand.filter(card => card.type === 'military').reduce((sum, card) => sum + card.value, 0);
 }
 
-// Calculate morale
+// Calculate morale (per rulebook: Morale = Luxury + Food)
 function calculateMorale(luxury, food) {
-  return Math.floor(luxury + food / 2);
+  return Math.floor(luxury + food);
 }
 
 // Calculate population
@@ -486,31 +486,53 @@ async function handleCreateGame() {
   showScreen('loading');
   
   try {
-    // Generate unique game code
-    const gameCode = generateGameCode();
     const playerId = generatePlayerId();
+    let gameCode = null;
+    let attempts = 0;
+    const maxAttempts = 5;
     
-    // Create game structure
-    const gameData = {
-      phase: 'SETUP',
-      locked: false,
-      hostId: playerId,
-      turnOrder: [playerId],
-      currentTurnIndex: 0,
-      round: 0,
-      naturalEventsEnabled: naturalEventsToggle.checked,
-      maxPlayers: MAX_PLAYERS,
-      meta: {
-        createdAt: serverTimestamp()
-      },
-      players: {
-        [playerId]: createPlayerData(playerName)
+    // Try to create game with unique code (with collision detection)
+    while (!gameCode && attempts < maxAttempts) {
+      const candidateCode = generateGameCode();
+      const gameRef = ref(database, `games/${candidateCode}`);
+      
+      // Use transaction to check if code exists
+      const result = await runTransaction(gameRef, (currentData) => {
+        if (currentData !== null) {
+          // Code already exists - returning undefined signals to Firebase
+          // that no update should occur, aborting this transaction attempt
+          return undefined;
+        }
+        
+        // Code is available, create the game
+        return {
+          phase: 'SETUP',
+          locked: false,
+          hostId: playerId,
+          turnOrder: [playerId],
+          currentTurnIndex: 0,
+          round: 0,
+          naturalEventsEnabled: naturalEventsToggle.checked,
+          maxPlayers: MAX_PLAYERS,
+          meta: {
+            createdAt: serverTimestamp()
+          },
+          players: {
+            [playerId]: createPlayerData(playerName)
+          }
+        };
+      });
+      
+      if (result.committed) {
+        gameCode = candidateCode;
+      } else {
+        attempts++;
       }
-    };
+    }
     
-    // Write to database using transaction for safety
-    const gameRef = ref(database, `games/${gameCode}`);
-    await set(gameRef, gameData);
+    if (!gameCode) {
+      throw new Error('Failed to generate unique game code after multiple attempts');
+    }
     
     // Save to state and localStorage
     currentGameCode = gameCode;
@@ -1171,12 +1193,15 @@ async function processInternalPressurePhase() {
     Object.keys(gameData.players).forEach(playerId => {
       const player = gameData.players[playerId];
       
-      // Food Stress
+      // Food Stress (per rulebook)
+      // Checks most severe condition first, then less severe via else-if
       const pop = player.stats.population;
       const food = player.stats.food;
-      if (food < pop * 4) {
+      if (food < pop * 2) {
+        // Severe shortage: food below 2x population = +10 unrest
         player.stats.unrest += 10;
-      } else if (food < pop * 2) {
+      } else if (food < pop * 4) {
+        // Moderate shortage: food below 4x population = +5 unrest
         player.stats.unrest += 5;
       }
       
@@ -1210,6 +1235,12 @@ async function advancePhase() {
   
   await runTransaction(gameRef, (gameData) => {
     if (!gameData) return;
+    
+    // Server-side security check: Only host can advance phases
+    // This is the authoritative check; client-side isHost is just for UX
+    if (gameData.hostId !== currentPlayerId) {
+      return undefined; // Abort transaction if non-host tries to advance
+    }
     
     // Check for game over
     if (gameData.gameOver) {
