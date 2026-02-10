@@ -165,7 +165,7 @@ Quick start:
 2. Run a local web server: `python3 -m http.server 8080` or `npm start`
 3. Open `test.html` in your browser to verify setup
 4. Open `index.html` to start the game
-5. Use creator key: `BeforeRoboticsGame` to create a game
+5. Use creator key: `abcd` to create a game
 6. Open another tab to join as a second player
 
 **Note**: For production deployment, configure `firebase-config-loader.js` to fetch configuration from a secure endpoint rather than embedding it directly.
