@@ -49,6 +49,14 @@
                 <div id="players-list"></div>
             </div>
             
+            <div class="card host-only">
+                <h3>Game Options</h3>
+                <label style="display: flex; align-items: center; gap: 8px;">
+                    <input type="checkbox" id="natural-events-toggle">
+                    <span>Enable Natural Events (optional)</span>
+                </label>
+            </div>
+            
             <button id="start-game-btn" class="btn btn-primary host-only hidden">Start Game</button>
             <button id="leave-lobby-btn" class="btn btn-secondary">Leave Lobby</button>
             
@@ -118,6 +126,12 @@
             <div class="card">
                 <h3>Diplomacy</h3>
                 <div id="diplomacy-panel"></div>
+            </div>
+            
+            <!-- Event Log -->
+            <div class="card">
+                <h3>Recent Events</h3>
+                <div id="event-log"></div>
             </div>
         </div>
         

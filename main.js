@@ -364,6 +364,8 @@ function updateWaitingRoom() {
 async function startGame() {
     if (!isHost) return;
     
+    const naturalEventsEnabled = document.getElementById('natural-events-toggle')?.checked || false;
+    
     try {
         await runTransaction(ref(db, `games/${currentGameCode}`), (game) => {
             if (!game) return game;
@@ -371,6 +373,7 @@ async function startGame() {
             game.locked = true;
             game.phase = "UPKEEP";
             game.round = 1;
+            game.naturalEventsEnabled = naturalEventsEnabled;
             
             return game;
         });
@@ -497,6 +500,9 @@ function renderGameScreen(game) {
     
     // Render diplomacy panel
     renderDiplomacyPanel(game);
+    
+    // Render event log
+    renderEventLog(game);
     
     // Render actions
     renderActions(game);
@@ -692,6 +698,37 @@ function renderDiplomacyPanel(game) {
     `;
 }
 
+function renderEventLog(game) {
+    const container = document.getElementById('event-log');
+    
+    if (!game.eventLog || game.eventLog.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-medium);">No events yet</p>';
+        return;
+    }
+    
+    container.innerHTML = '';
+    
+    // Show most recent events first
+    const recentEvents = [...game.eventLog].reverse().slice(0, 5);
+    
+    recentEvents.forEach(event => {
+        const eventDiv = document.createElement('div');
+        eventDiv.style.cssText = 'padding: 8px; background: var(--bg-dark); border-radius: 4px; margin-bottom: 4px; font-size: 0.9rem;';
+        
+        const playerName = game.players[event.affectedPlayer]?.name || 'Unknown';
+        
+        eventDiv.innerHTML = `
+            <div style="display: flex; justify-content: space-between;">
+                <strong style="color: var(--danger-color);">${event.type}</strong>
+                <span style="color: var(--text-medium);">Round ${event.round}</span>
+            </div>
+            <div>${playerName}: ${event.effect}</div>
+        `;
+        
+        container.appendChild(eventDiv);
+    });
+}
+
 function renderActions(game) {
     const player = game.players[currentPlayerId];
     if (!player) return;
@@ -734,6 +771,11 @@ async function nextPhase() {
             const currentIndex = PHASES.indexOf(game.phase);
             let nextIndex = (currentIndex + 1) % PHASES.length;
             
+            // Skip NATURAL_EVENTS if not enabled
+            if (PHASES[nextIndex] === 'NATURAL_EVENTS' && !game.naturalEventsEnabled) {
+                nextIndex = (nextIndex + 1) % PHASES.length;
+            }
+            
             game.phase = PHASES[nextIndex];
             
             // If we're back to UPKEEP, increment round
@@ -756,10 +798,71 @@ async function nextPhase() {
                 });
             }
             
+            // Process natural events if that's the current phase
+            if (game.phase === 'NATURAL_EVENTS' && game.naturalEventsEnabled) {
+                processNaturalEvent(game);
+            }
+            
             return game;
         });
     } catch (error) {
         console.error('Error advancing phase:', error);
+    }
+}
+
+// ========================================
+// NATURAL EVENTS
+// ========================================
+
+function processNaturalEvent(game) {
+    // Roll to select affected player
+    const playerIds = Object.keys(game.players).filter(pid => !game.players[pid].collapsed);
+    if (playerIds.length === 0) return;
+    
+    const affectedIndex = Math.floor(Math.random() * playerIds.length);
+    const affectedPlayerId = playerIds[affectedIndex];
+    const player = game.players[affectedPlayerId];
+    
+    // Roll for event type (1-6 maps to 4 types)
+    const eventRoll = Math.floor(Math.random() * 6) + 1;
+    let eventType, eventEffect;
+    
+    if (eventRoll <= 2) {
+        // Drought - halve farm production next round
+        eventType = 'Drought';
+        eventEffect = 'Farm production halved next round';
+        if (!player.effects) player.effects = [];
+        player.effects.push({ type: 'drought', duration: 1 });
+    } else if (eventRoll <= 4) {
+        // Plague - reduce morale
+        eventType = 'Plague';
+        eventEffect = 'Morale reduced by 5';
+        player.stats.morale = Math.max(0, player.stats.morale - 5);
+    } else if (eventRoll === 5) {
+        // Earthquake - lose farm
+        eventType = 'Earthquake';
+        eventEffect = 'Lost 1 farm';
+        player.stats.farms = Math.max(0, player.stats.farms - 1);
+    } else {
+        // Flood - lose food
+        eventType = 'Flood';
+        eventEffect = 'Lost 10 food';
+        player.stats.food = Math.max(0, player.stats.food - 10);
+    }
+    
+    // Log the event
+    if (!game.eventLog) game.eventLog = [];
+    game.eventLog.push({
+        round: game.round,
+        type: eventType,
+        affectedPlayer: affectedPlayerId,
+        effect: eventEffect,
+        timestamp: Date.now()
+    });
+    
+    // Keep only last 10 events
+    if (game.eventLog.length > 10) {
+        game.eventLog = game.eventLog.slice(-10);
     }
 }
 
@@ -769,7 +872,17 @@ function processUpkeep(game, playerId) {
     
     // Food production
     const isSieged = game.sieges && game.sieges[playerId];
-    player.stats.food += player.stats.farms * (isSieged ? 0 : 20);
+    const hasDrought = player.effects && player.effects.some(e => e.type === 'drought');
+    const farmMultiplier = isSieged ? 0 : (hasDrought ? 10 : 20); // Half production if drought
+    player.stats.food += player.stats.farms * farmMultiplier;
+    
+    // Process and remove expired effects
+    if (player.effects) {
+        player.effects = player.effects.filter(effect => {
+            effect.duration = (effect.duration || 1) - 1;
+            return effect.duration > 0;
+        });
+    }
     
     // Morale calculation
     player.stats.morale = calculateMorale(player.stats.food, player.stats.luxury);
