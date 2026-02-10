@@ -225,10 +225,27 @@ const actionBuyCard = document.getElementById('actionBuyCard');
 const actionBuyFarm = document.getElementById('actionBuyFarm');
 const actionBuyLuxury = document.getElementById('actionBuyLuxury');
 const actionReduceUnrest = document.getElementById('actionReduceUnrest');
+const actionWar = document.getElementById('actionWar');
+const actionTrade = document.getElementById('actionTrade');
 const gameHostControls = document.getElementById('gameHostControls');
 const btnAdvancePhase = document.getElementById('btnAdvancePhase');
 const otherPlayersList = document.getElementById('otherPlayersList');
 const leaveGameBtn2 = document.getElementById('leaveGameBtn2');
+
+// Modals
+const warModal = document.getElementById('warModal');
+const closeWarModal = document.getElementById('closeWarModal');
+const warTargetSelect = document.getElementById('warTargetSelect');
+const btnDeclareWar = document.getElementById('btnDeclareWar');
+const activeWarsList = document.getElementById('activeWarsList');
+
+const rebellionModal = document.getElementById('rebellionModal');
+const closeRebellionModal = document.getElementById('closeRebellionModal');
+
+const tradeModal = document.getElementById('tradeModal');
+const closeTradeModal = document.getElementById('closeTradeModal');
+const tradeTargetSelect = document.getElementById('tradeTargetSelect');
+const btnSendTrade = document.getElementById('btnSendTrade');
 
 // ============================================================================
 // Initialization
@@ -276,6 +293,70 @@ function initializeEventListeners() {
     const result = await reduceUnrest();
     if (!result.success) {
       alert(result.error);
+    }
+  });
+  
+  // War and trade modals
+  actionWar.addEventListener('click', () => {
+    warModal.classList.remove('hidden');
+  });
+  
+  actionTrade.addEventListener('click', () => {
+    tradeModal.classList.remove('hidden');
+  });
+  
+  closeWarModal.addEventListener('click', () => {
+    warModal.classList.add('hidden');
+  });
+  
+  closeTradeModal.addEventListener('click', () => {
+    tradeModal.classList.add('hidden');
+  });
+  
+  closeRebellionModal.addEventListener('click', () => {
+    rebellionModal.classList.add('hidden');
+  });
+  
+  btnDeclareWar.addEventListener('click', async () => {
+    const targetId = warTargetSelect.value;
+    if (!targetId) {
+      alert('Please select a target');
+      return;
+    }
+    const result = await declareWar(targetId);
+    if (!result.success) {
+      alert(result.error);
+    } else {
+      alert('War declared!');
+      warModal.classList.add('hidden');
+    }
+  });
+  
+  btnSendTrade.addEventListener('click', async () => {
+    const targetId = tradeTargetSelect.value;
+    if (!targetId) {
+      alert('Please select a player');
+      return;
+    }
+    
+    const offering = {
+      economy: parseInt(document.getElementById('offerEconomy').value) || 0,
+      food: parseInt(document.getElementById('offerFood').value) || 0,
+      luxury: parseInt(document.getElementById('offerLuxury').value) || 0
+    };
+    
+    const requesting = {
+      economy: parseInt(document.getElementById('requestEconomy').value) || 0,
+      food: parseInt(document.getElementById('requestFood').value) || 0,
+      luxury: parseInt(document.getElementById('requestLuxury').value) || 0
+    };
+    
+    const result = await sendTradeOffer(targetId, { offering, requesting });
+    if (!result.success) {
+      alert(result.error);
+    } else {
+      alert('Trade offer sent!');
+      tradeModal.classList.add('hidden');
     }
   });
   
@@ -670,6 +751,10 @@ function updateOtherPlayersList(players) {
   
   otherPlayersList.innerHTML = '';
   
+  // Also update modal selects
+  warTargetSelect.innerHTML = '<option value="">Select opponent...</option>';
+  tradeTargetSelect.innerHTML = '<option value="">Select player...</option>';
+  
   Object.entries(players).forEach(([playerId, playerData]) => {
     if (playerId === currentPlayerId) return; // Skip current player
     
@@ -689,6 +774,17 @@ function updateOtherPlayersList(players) {
     playerDiv.appendChild(nameSpan);
     playerDiv.appendChild(statsSpan);
     otherPlayersList.appendChild(playerDiv);
+    
+    // Add to modal selects
+    const warOption = document.createElement('option');
+    warOption.value = playerId;
+    warOption.textContent = playerData.name;
+    warTargetSelect.appendChild(warOption);
+    
+    const tradeOption = document.createElement('option');
+    tradeOption.value = playerId;
+    tradeOption.textContent = playerData.name;
+    tradeTargetSelect.appendChild(tradeOption);
   });
   
   if (otherPlayersList.children.length === 0) {
@@ -1076,6 +1172,327 @@ async function advancePhase() {
 // Player Actions
 // ============================================================================
 
+// Declare war (STATE_ACTIONS phase, military action)
+async function declareWar(targetPlayerId) {
+  if (!currentGameCode || !currentPlayerId) return;
+  
+  const gameRef = ref(database, `games/${currentGameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (gameData) => {
+      if (!gameData || gameData.phase !== 'STATE_ACTIONS') {
+        throw new Error('Not in STATE_ACTIONS phase');
+      }
+      
+      const player = gameData.players[currentPlayerId];
+      const target = gameData.players[targetPlayerId];
+      
+      if (!target) {
+        throw new Error('Target player not found');
+      }
+      
+      // Validations
+      if (player.actionsThisRound.military) {
+        throw new Error('Already performed military action this round');
+      }
+      
+      // Initialize war track if not exists
+      if (!player.warTracks) {
+        player.warTracks = {};
+      }
+      
+      if (!player.warTracks[targetPlayerId]) {
+        player.warTracks[targetPlayerId] = 0;
+      }
+      
+      player.actionsThisRound.military = true;
+      
+      return gameData;
+    });
+    
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// Commit troops to war (WAR phase)
+async function commitTroops(targetPlayerId, frontline, garrison, reserve) {
+  if (!currentGameCode || !currentPlayerId) return;
+  
+  const gameRef = ref(database, `games/${currentGameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (gameData) => {
+      if (!gameData || gameData.phase !== 'WAR') {
+        throw new Error('Not in WAR phase');
+      }
+      
+      const player = gameData.players[currentPlayerId];
+      
+      // Validate total doesn't exceed military
+      const total = frontline + garrison + reserve;
+      if (total > player.stats.military) {
+        throw new Error('Not enough military forces');
+      }
+      
+      // Store commitment
+      if (!player.warCommitments) {
+        player.warCommitments = {};
+      }
+      
+      player.warCommitments[targetPlayerId] = {
+        frontline,
+        garrison,
+        reserve
+      };
+      
+      return gameData;
+    });
+    
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// Conduct battle (WAR phase, host only)
+async function conductBattle(attackerId, defenderId) {
+  if (!isHost || !currentGameCode) return;
+  
+  const gameRef = ref(database, `games/${currentGameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (gameData) => {
+      if (!gameData || gameData.phase !== 'WAR') {
+        throw new Error('Not in WAR phase');
+      }
+      
+      const attacker = gameData.players[attackerId];
+      const defender = gameData.players[defenderId];
+      
+      if (!attacker.warCommitments || !attacker.warCommitments[defenderId]) {
+        throw new Error('No war commitment found');
+      }
+      
+      const attackerForce = attacker.warCommitments[defenderId].frontline;
+      const defenderForce = defender.warCommitments?.[attackerId]?.frontline || defender.stats.military;
+      
+      // Battle outcome (attacker wins ties)
+      const attackerWins = attackerForce >= defenderForce;
+      const isClear = Math.abs(attackerForce - defenderForce) > 10;
+      
+      // Roll casualty die
+      const casualtyRoll = rollDie();
+      let casualtyFraction = casualtyRoll / 6;
+      
+      // Apply casualties
+      const attackerLosses = Math.floor(attackerForce * casualtyFraction);
+      const defenderLosses = Math.floor(defenderForce * casualtyFraction);
+      
+      // Update war track
+      if (!attacker.warTracks) attacker.warTracks = {};
+      if (!attacker.warTracks[defenderId]) attacker.warTracks[defenderId] = 0;
+      
+      if (attackerWins) {
+        attacker.warTracks[defenderId] += isClear ? 2 : 1;
+      }
+      
+      // Check for siege (track >= 3)
+      if (attacker.warTracks[defenderId] >= 3) {
+        defender.siegedBy = attackerId;
+      }
+      
+      // Check for collapse (track >= 7)
+      if (attacker.warTracks[defenderId] >= 7) {
+        defender.occupiedBy = attackerId;
+        if (!attacker.occupying) attacker.occupying = [];
+        if (!attacker.occupying.includes(defenderId)) {
+          attacker.occupying.push(defenderId);
+        }
+      }
+      
+      // Record battle results
+      if (!gameData.battleLog) gameData.battleLog = [];
+      gameData.battleLog.push({
+        round: gameData.round,
+        attacker: attackerId,
+        defender: defenderId,
+        attackerForce,
+        defenderForce,
+        attackerWins,
+        isClear,
+        casualtyRoll,
+        attackerLosses,
+        defenderLosses,
+        warTrack: attacker.warTracks[defenderId]
+      });
+      
+      return gameData;
+    });
+    
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// Process rebellion stage (REBELLION phase)
+async function processRebellion(playerId) {
+  if (!isHost || !currentGameCode) return;
+  
+  const gameRef = ref(database, `games/${currentGameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (gameData) => {
+      if (!gameData || gameData.phase !== 'REBELLION') {
+        throw new Error('Not in REBELLION phase');
+      }
+      
+      const player = gameData.players[playerId];
+      
+      if (player.rebellionTrack === null) {
+        return gameData; // No rebellion
+      }
+      
+      // Calculate rebellion dice pool
+      let rebellionDice = 2;
+      if (player.stats.population >= 75) rebellionDice += 1;
+      if (player.siegedBy) rebellionDice += 1;
+      if (player.stats.food < player.stats.population * 2) rebellionDice += 1;
+      
+      // Calculate government dice pool
+      let govDice = 2;
+      govDice += Math.floor(player.stats.military / 20);
+      
+      // Roll dice
+      const rebellionRolls = rollDice(rebellionDice);
+      const govRolls = rollDice(govDice);
+      
+      const rebellionTotal = rebellionRolls.reduce((sum, val) => sum + val, 0);
+      const govTotal = govRolls.reduce((sum, val) => sum + val, 0);
+      
+      // Determine outcome based on stage
+      const stage = Math.floor(player.rebellionTrack);
+      let trackChange = 0;
+      
+      if (stage <= 2) {
+        // Stage 1: Civil Disorder
+        if (rebellionTotal > govTotal) {
+          trackChange = 1;
+        } else {
+          trackChange = -1;
+        }
+      } else if (stage <= 4) {
+        // Stage 2: Armed Uprising
+        if (rebellionTotal > govTotal) {
+          trackChange = 2;
+        } else {
+          trackChange = -1;
+        }
+      } else {
+        // Stage 3: Regime Collapse
+        if (rebellionTotal > govTotal) {
+          trackChange = 2;
+        } else {
+          trackChange = -2;
+        }
+      }
+      
+      player.rebellionTrack += trackChange;
+      
+      // Check for resolution
+      if (player.rebellionTrack <= 0) {
+        player.rebellionTrack = null;
+        player.stats.unrest = Math.max(0, player.stats.unrest - 20);
+      } else if (player.rebellionTrack >= 6) {
+        // Civilization collapses
+        player.collapsed = true;
+      }
+      
+      return gameData;
+    });
+    
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// Apply natural event (NATURAL_EVENTS phase, host only)
+async function applyNaturalEvent() {
+  if (!isHost || !currentGameCode) return;
+  
+  const gameRef = ref(database, `games/${currentGameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (gameData) => {
+      if (!gameData || gameData.phase !== 'NATURAL_EVENTS') {
+        throw new Error('Not in NATURAL_EVENTS phase');
+      }
+      
+      if (!gameData.naturalEventsEnabled) {
+        return gameData; // Skip if disabled
+      }
+      
+      const playerIds = Object.keys(gameData.players);
+      if (playerIds.length === 0) return gameData;
+      
+      // Roll to pick affected player
+      const playerRoll = rollDie();
+      const affectedPlayerId = playerIds[playerRoll % playerIds.length];
+      const player = gameData.players[affectedPlayerId];
+      
+      // Roll for event category
+      const eventRoll = rollDie();
+      let eventType = '';
+      
+      switch(eventRoll) {
+        case 1:
+        case 2:
+          // Drought - halve farm production next round
+          player.droughtNextRound = true;
+          eventType = 'Drought';
+          break;
+        case 3:
+          // Plague - reduce morale by 5
+          player.stats.morale = Math.max(0, player.stats.morale - 5);
+          eventType = 'Plague';
+          break;
+        case 4:
+          // Earthquake - lose 1 farm
+          player.farms = Math.max(0, player.farms - 1);
+          eventType = 'Earthquake';
+          break;
+        case 5:
+        case 6:
+          // Flood - lose 10 food
+          player.stats.food = Math.max(0, player.stats.food - 10);
+          eventType = 'Flood';
+          break;
+      }
+      
+      // Record event
+      if (!gameData.eventLog) gameData.eventLog = [];
+      gameData.eventLog.push({
+        round: gameData.round,
+        player: affectedPlayerId,
+        eventType
+      });
+      
+      return gameData;
+    });
+    
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// ============================================================================
+// Player Actions
+// ============================================================================
+
 // Buy a card (STATE_ACTIONS phase)
 async function buyCard() {
   if (!currentGameCode || !currentPlayerId) return;
@@ -1273,6 +1690,153 @@ async function discardCards(cardIds) {
   }
 }
 
+// Send trade offer (STATE_ACTIONS phase, diplomatic action)
+async function sendTradeOffer(targetPlayerId, offer) {
+  if (!currentGameCode || !currentPlayerId) return;
+  
+  const gameRef = ref(database, `games/${currentGameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (gameData) => {
+      if (!gameData || gameData.phase !== 'STATE_ACTIONS') {
+        throw new Error('Not in STATE_ACTIONS phase');
+      }
+      
+      const player = gameData.players[currentPlayerId];
+      const target = gameData.players[targetPlayerId];
+      
+      if (!target) {
+        throw new Error('Target player not found');
+      }
+      
+      // Validations
+      if (player.actionsThisRound.diplomatic) {
+        throw new Error('Already performed diplomatic action this round');
+      }
+      
+      // Create trade offer
+      const tradeOffer = {
+        id: `trade_${Date.now()}`,
+        from: currentPlayerId,
+        to: targetPlayerId,
+        offering: offer.offering,
+        requesting: offer.requesting,
+        status: 'pending',
+        round: gameData.round
+      };
+      
+      // Add to sender's sent offers
+      if (!player.tradeOffersSent) player.tradeOffersSent = [];
+      player.tradeOffersSent.push(tradeOffer);
+      
+      // Add to receiver's received offers
+      if (!target.tradeOffersReceived) target.tradeOffersReceived = [];
+      target.tradeOffersReceived.push(tradeOffer);
+      
+      player.actionsThisRound.diplomatic = true;
+      
+      return gameData;
+    });
+    
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// Accept trade offer
+async function acceptTradeOffer(tradeId) {
+  if (!currentGameCode || !currentPlayerId) return;
+  
+  const gameRef = ref(database, `games/${currentGameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (gameData) => {
+      if (!gameData) return;
+      
+      const player = gameData.players[currentPlayerId];
+      
+      // Find the trade offer
+      const offer = player.tradeOffersReceived?.find(t => t.id === tradeId);
+      if (!offer || offer.status !== 'pending') {
+        throw new Error('Trade offer not found or already resolved');
+      }
+      
+      const sender = gameData.players[offer.from];
+      
+      // Execute trade
+      // Transfer resources from sender to receiver
+      Object.entries(offer.offering).forEach(([resource, amount]) => {
+        if (resource === 'economy' || resource === 'food' || resource === 'luxury') {
+          sender.stats[resource] = Math.max(0, sender.stats[resource] - amount);
+          player.stats[resource] += amount;
+        }
+      });
+      
+      // Transfer resources from receiver to sender
+      Object.entries(offer.requesting).forEach(([resource, amount]) => {
+        if (resource === 'economy' || resource === 'food' || resource === 'luxury') {
+          player.stats[resource] = Math.max(0, player.stats[resource] - amount);
+          sender.stats[resource] += amount;
+        }
+      });
+      
+      // Mark as accepted
+      offer.status = 'accepted';
+      
+      return gameData;
+    });
+    
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+// Foreign interference (INTERNAL_PRESSURE phase)
+async function foreignInterference(targetPlayerId, amount) {
+  if (!currentGameCode || !currentPlayerId) return;
+  
+  const gameRef = ref(database, `games/${currentGameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (gameData) => {
+      if (!gameData || gameData.phase !== 'INTERNAL_PRESSURE') {
+        throw new Error('Not in INTERNAL_PRESSURE phase');
+      }
+      
+      const player = gameData.players[currentPlayerId];
+      const target = gameData.players[targetPlayerId];
+      
+      if (!target) {
+        throw new Error('Target player not found');
+      }
+      
+      // Validations
+      if (target.stats.unrest < 75) {
+        throw new Error('Target must have 75+ unrest');
+      }
+      
+      if (player.stats.economy < amount) {
+        throw new Error('Not enough economy');
+      }
+      
+      if (amount > 10) {
+        throw new Error('Maximum 10 unrest per round');
+      }
+      
+      // Apply interference
+      target.stats.unrest += amount;
+      
+      return gameData;
+    });
+    
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
 // ============================================================================
 // Exports (for potential future use)
 // ============================================================================
@@ -1288,5 +1852,17 @@ window.civilizationGame = {
   buyFarm,
   buyLuxury,
   reduceUnrest,
-  discardCards
+  discardCards,
+  // War actions
+  declareWar,
+  commitTroops,
+  conductBattle,
+  // Rebellion
+  processRebellion,
+  // Natural events
+  applyNaturalEvent,
+  // Trading & diplomacy
+  sendTradeOffer,
+  acceptTradeOffer,
+  foreignInterference
 };

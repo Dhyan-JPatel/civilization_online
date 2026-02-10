@@ -126,6 +126,8 @@
           <button id="actionBuyFarm" class="action-btn">Buy Farm (5 Economy)</button>
           <button id="actionBuyLuxury" class="action-btn">Buy Luxury (1 Economy)</button>
           <button id="actionReduceUnrest" class="action-btn">Reduce Unrest</button>
+          <button id="actionWar" class="action-btn">War Actions</button>
+          <button id="actionTrade" class="action-btn">Trading</button>
         </div>
         <p id="actionHint" class="hint">Actions available in STATE_ACTIONS phase</p>
       </div>
@@ -144,6 +146,71 @@
       <!-- Leave Game -->
       <div class="section">
         <button id="leaveGameBtn2" class="btn btn-danger">Leave Game</button>
+      </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="warModal" class="modal hidden">
+      <div class="modal-content">
+        <h2>War Actions</h2>
+        <div id="warModalBody">
+          <div class="section">
+            <h3>Declare War</h3>
+            <select id="warTargetSelect" class="input">
+              <option value="">Select opponent...</option>
+            </select>
+            <button id="btnDeclareWar" class="btn btn-primary">Declare War</button>
+          </div>
+          
+          <div class="section">
+            <h3>Current Wars</h3>
+            <div id="activeWarsList"></div>
+          </div>
+        </div>
+        <button id="closeWarModal" class="btn btn-danger">Close</button>
+      </div>
+    </div>
+
+    <div id="rebellionModal" class="modal hidden">
+      <div class="modal-content">
+        <h2>Rebellion Status</h2>
+        <div id="rebellionModalBody">
+          <p id="rebellionStatus" class="hint">No active rebellion</p>
+          <div id="rebellionDetails" class="hidden">
+            <p>Rebellion Track: <strong id="rebellionTrackValue">0</strong></p>
+            <p>Stage: <strong id="rebellionStage">-</strong></p>
+          </div>
+        </div>
+        <button id="closeRebellionModal" class="btn btn-danger">Close</button>
+      </div>
+    </div>
+
+    <div id="tradeModal" class="modal hidden">
+      <div class="modal-content">
+        <h2>Trading</h2>
+        <div id="tradeModalBody">
+          <div class="section">
+            <h3>Trade Offers Received</h3>
+            <div id="receivedTradesList"></div>
+          </div>
+          
+          <div class="section">
+            <h3>Send New Trade Offer</h3>
+            <select id="tradeTargetSelect" class="input">
+              <option value="">Select player...</option>
+            </select>
+            <p class="hint">Offer resources:</p>
+            <input type="number" id="offerEconomy" placeholder="Economy" class="input" min="0">
+            <input type="number" id="offerFood" placeholder="Food" class="input" min="0">
+            <input type="number" id="offerLuxury" placeholder="Luxury" class="input" min="0">
+            <p class="hint">Request resources:</p>
+            <input type="number" id="requestEconomy" placeholder="Economy" class="input" min="0">
+            <input type="number" id="requestFood" placeholder="Food" class="input" min="0">
+            <input type="number" id="requestLuxury" placeholder="Luxury" class="input" min="0">
+            <button id="btnSendTrade" class="btn btn-success">Send Trade Offer</button>
+          </div>
+        </div>
+        <button id="closeTradeModal" class="btn btn-danger">Close</button>
       </div>
     </div>
 
