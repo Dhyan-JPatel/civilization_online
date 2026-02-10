@@ -1,6 +1,6 @@
 // Firebase Modular SDK v9+ imports
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-import { getDatabase, ref, set, get, update, remove, onValue, off, serverTimestamp, runTransaction, push } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js';
+import { getDatabase, ref, set, get, update, remove, onValue, off, serverTimestamp, runTransaction } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js';
 
 // ========================================
 // FIREBASE INITIALIZATION
@@ -74,8 +74,15 @@ function sanitizeName(name) {
 }
 
 function showScreen(screenId) {
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    document.getElementById(screenId).classList.add('active');
+    document.querySelectorAll('.screen').forEach(s => {
+        if (s.id === screenId) {
+            s.classList.add('active');
+            s.classList.remove('hidden');
+        } else {
+            s.classList.remove('active');
+            s.classList.add('hidden');
+        }
+    });
 }
 
 function showStatus(elementId, message, type = 'info') {
@@ -160,7 +167,7 @@ function calculateMilitary(hand) {
 // ========================================
 
 function calculateMorale(food, luxury) {
-    return Math.floor((luxury + food) / 2);
+    return luxury + food;
 }
 
 function calculatePopulation(luxury, food, morale, military) {
@@ -178,8 +185,8 @@ function calculatePopulationPressure(population) {
 }
 
 function calculateFoodStress(food, population) {
-    if (food < population * 4) return 10;
-    if (food < population * 2) return 5;
+    if (food < population * 2) return 10;
+    if (food < population * 4) return 5;
     return 0;
 }
 
@@ -271,13 +278,37 @@ async function createGame() {
     }
     
     try {
-        currentGameCode = generateGameCode();
         currentPlayerId = generatePlayerId();
         currentPlayerName = sanitizeName(hostName);
         isHost = true;
         
         const gameData = createGameData(currentPlayerId, currentPlayerName);
-        await set(ref(db, `games/${currentGameCode}`), gameData);
+        
+        // Attempt to create a game with a unique code using a transaction
+        const maxAttempts = 5;
+        let created = false;
+        
+        for (let attempt = 0; attempt < maxAttempts && !created; attempt++) {
+            currentGameCode = generateGameCode();
+            const gameRef = ref(db, `games/${currentGameCode}`);
+            
+            const result = await runTransaction(gameRef, (currentData) => {
+                if (currentData === null) {
+                    // Code is free; claim it with our new game data
+                    return gameData;
+                }
+                // Code already in use; abort this transaction
+                return;
+            });
+            
+            if (result.committed) {
+                created = true;
+            }
+        }
+        
+        if (!created) {
+            throw new Error('Unable to generate a unique game code');
+        }
         
         // Save to localStorage
         localStorage.setItem('civ_gameCode', currentGameCode);
@@ -333,10 +364,12 @@ async function joinGame() {
         const playerData = createPlayerData(currentPlayerName);
         await set(ref(db, `games/${gameCode}/players/${currentPlayerId}`), playerData);
         
-        // Add to turn order
-        const turnOrder = gameData.turnOrder || [];
-        turnOrder.push(currentPlayerId);
-        await set(ref(db, `games/${gameCode}/turnOrder`), turnOrder);
+        // Add to turn order atomically to avoid race conditions on concurrent joins
+        await runTransaction(ref(db, `games/${gameCode}/turnOrder`), (currentTurnOrder) => {
+            const updatedTurnOrder = Array.isArray(currentTurnOrder) ? [...currentTurnOrder] : [];
+            updatedTurnOrder.push(currentPlayerId);
+            return updatedTurnOrder;
+        });
         
         // Save to localStorage
         localStorage.setItem('civ_gameCode', currentGameCode);
@@ -767,6 +800,8 @@ async function nextPhase() {
     try {
         await runTransaction(ref(db, `games/${currentGameCode}`), (game) => {
             if (!game) return game;
+            // Ensure only the host recorded in the game can advance the phase
+            if (game.hostId !== currentPlayerId) return game;
             
             const currentIndex = PHASES.indexOf(game.phase);
             let nextIndex = (currentIndex + 1) % PHASES.length;
@@ -989,6 +1024,12 @@ async function buyLuxury() {
     
     if (isNaN(luxuryAmount) || luxuryAmount <= 0) return;
     
+    // Roll dice for luxury outside transaction to avoid retries changing the result
+    let totalLuxury = 0;
+    for (let i = 0; i < luxuryAmount; i++) {
+        totalLuxury += Math.floor(Math.random() * 6) + 1;
+    }
+    
     try {
         await runTransaction(ref(db, `games/${currentGameCode}/players/${currentPlayerId}`), (player) => {
             if (!player) return player;
@@ -996,12 +1037,6 @@ async function buyLuxury() {
             if (player.stats.economy < luxuryAmount) return player;
             if (player.actionsThisRound.count >= 2) return player;
             if (player.actionsThisRound.categories.includes('Economic')) return player;
-            
-            // Roll dice for luxury
-            let totalLuxury = 0;
-            for (let i = 0; i < luxuryAmount; i++) {
-                totalLuxury += Math.floor(Math.random() * 6) + 1;
-            }
             
             player.stats.luxury += totalLuxury;
             player.stats.economy -= luxuryAmount;
@@ -1513,6 +1548,7 @@ document.getElementById('join-game-btn').addEventListener('click', joinGame);
 document.getElementById('start-game-btn').addEventListener('click', startGame);
 document.getElementById('leave-lobby-btn').addEventListener('click', leaveLobby);
 document.getElementById('next-phase-btn').addEventListener('click', nextPhase);
+document.getElementById('draw-card-btn').addEventListener('click', buyCard);
 
 // Make functions available globally
 window.buyCard = buyCard;

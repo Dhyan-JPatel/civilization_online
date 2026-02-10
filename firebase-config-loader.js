@@ -24,13 +24,15 @@
     // Option 3: For local development only (NOT FOR PRODUCTION)
     // You can set config directly here during development
     // IMPORTANT: Never commit real credentials!
-    window.__FIREBASE_CONFIG__ = {
-        apiKey: "YOUR_API_KEY_HERE",
-        authDomain: "your-project.firebaseapp.com",
-        databaseURL: "https://your-project-default-rtdb.firebaseio.com",
-        projectId: "your-project",
-        storageBucket: "your-project.firebasestorage.app",
-        messagingSenderId: "YOUR_SENDER_ID",
-        appId: "YOUR_APP_ID"
-    };
+    if (!window.__FIREBASE_CONFIG__) {
+        window.__FIREBASE_CONFIG__ = {
+            apiKey: "YOUR_API_KEY_HERE",
+            authDomain: "your-project.firebaseapp.com",
+            databaseURL: "https://your-project-default-rtdb.firebaseio.com",
+            projectId: "your-project",
+            storageBucket: "your-project.firebasestorage.app",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+    }
 })();
