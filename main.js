@@ -139,10 +139,10 @@ function rollDice(count) {
 // Firebase Initialization
 // ============================================================================
 
-// TODO: Replace with runtime configuration from deployment environment
-// Expected: window.RUNTIME_FIREBASE_CONFIG to be set before this script loads
-// For development, you can temporarily set it in the browser console or via inline script
-const firebaseConfig = window.RUNTIME_FIREBASE_CONFIG || {
+// Firebase configuration is loaded from firebase-config-loader.js
+// Expected: window.__FIREBASE_CONFIG__ to be set before this script loads
+// For development, you can modify firebase-config-loader.js directly
+const firebaseConfig = window.__FIREBASE_CONFIG__ || {
   apiKey: "PLACEHOLDER_API_KEY",
   authDomain: "PLACEHOLDER_PROJECT_ID.firebaseapp.com",
   databaseURL: "https://PLACEHOLDER_PROJECT_ID-default-rtdb.firebaseio.com",

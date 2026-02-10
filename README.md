@@ -99,10 +99,12 @@ All game phases are now implemented:
 See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed setup and deployment instructions.
 
 Quick start:
-1. Create `index.dev.html` with your Firebase config (see DEPLOYMENT.md)
-2. Open `index.dev.html` in your browser
+1. Edit `firebase-config-loader.js` with your Firebase project configuration
+2. Open `index.html` in your browser (or use a local web server)
 3. Use creator key: `BeforeRoboticsGame` to create a game
 4. Open another tab to join as a second player
+
+**Note**: For production deployment, configure `firebase-config-loader.js` to fetch configuration from a secure endpoint rather than embedding it directly.
 
 ### For Players
 
@@ -125,7 +127,7 @@ civilization_online/
 ├── index.html              # Main HTML (no secrets)
 ├── main.js                 # Application logic with modular Firebase
 ├── style.css               # Responsive mobile-first styles
-├── firebaseconfig.txt      # Placeholder instructions for config
+├── firebase-config-loader.js  # Runtime configuration loader
 ├── civilization_game_manual.txt  # Complete game rules
 ├── DEPLOYMENT.md           # Setup and deployment guide
 ├── LICENSE                 # Apache 2.0 License
@@ -134,8 +136,11 @@ civilization_online/
 
 ## Security
 
-- Firebase configuration must be provided at runtime via `window.RUNTIME_FIREBASE_CONFIG`
-- No secrets are committed to the repository
+- Firebase configuration is loaded via `firebase-config-loader.js` which supports:
+  - Runtime injection from environment variables
+  - Fetching from a secure backend endpoint
+  - Direct configuration for development (not recommended for production)
+- No secrets are committed to the repository (firebaseconfig.txt is .gitignored)
 - All database writes use Firebase transactions for consistency
 - See DEPLOYMENT.md for secure configuration methods
 
