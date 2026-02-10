@@ -1,29 +1,22 @@
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+Firebase Configuration - Placeholder
+=====================================
 
-// Your web app's Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyB60cn2DLhu_VzhprtZ5x_SSzfcfjKzfVk",
-  authDomain: "civilization-game-efa6b.firebaseapp.com",
-  databaseURL: "https://civilization-game-efa6b-default-rtdb.firebaseio.com",
-  projectId: "civilization-game-efa6b",
-  storageBucket: "civilization-game-efa6b.firebasestorage.app",
-  messagingSenderId: "786254154239",
-  appId: "1:786254154239:web:9320036b347a64f9567fca"
-};
+This file previously contained sensitive Firebase configuration data.
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+Firebase configuration must now be provided at runtime via the deployment environment.
 
-config:
-const firebaseConfig = {
-  apiKey: "AIzaSyB60cn2DLhu_VzhprtZ5x_SSzfcfjKzfVk",
-  authDomain: "civilization-game-efa6b.firebaseapp.com",
-  databaseURL: "https://civilization-game-efa6b-default-rtdb.firebaseio.com",
-  projectId: "civilization-game-efa6b",
-  storageBucket: "civilization-game-efa6b.firebasestorage.app",
-  messagingSenderId: "786254154239",
-  appId: "1:786254154239:web:9320036b347a64f9567fca"
-};
+Set window.RUNTIME_FIREBASE_CONFIG before loading the application with an object containing:
+{
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+}
+
+Example deployment:
+1. Set environment variables in your hosting platform
+2. Inject configuration via build script or inline script tag before loading app
+3. Ensure RUNTIME_FIREBASE_CONFIG is available on window object

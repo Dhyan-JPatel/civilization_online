@@ -1,0 +1,22 @@
+# Development files with secrets
+index.dev.html
+test_config.html
+
+# Node modules if added later
+node_modules/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/
+build/
+*.log
