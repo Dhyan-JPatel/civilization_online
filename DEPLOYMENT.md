@@ -31,7 +31,7 @@ window.__FIREBASE_CONFIG__ = {
     authDomain: "your-project.firebaseapp.com",
     databaseURL: "https://your-project-default-rtdb.firebaseio.com",
     projectId: "your-project",
-    storageBucket: "your-project.firebasestorage.app",
+    storageBucket: "your-project.appspot.com",
     messagingSenderId: "your-sender-id",
     appId: "your-app-id"
 };
@@ -132,7 +132,7 @@ Alternatively, create `index.dev.html` (gitignored) with inline config:
       authDomain: "your-project.firebaseapp.com",
       databaseURL: "https://your-project-default-rtdb.firebaseio.com",
       projectId: "your-project",
-      storageBucket: "your-project.firebasestorage.app",
+      storageBucket: "your-project.appspot.com",
       messagingSenderId: "your-sender-id",
       appId: "your-app-id"
     };

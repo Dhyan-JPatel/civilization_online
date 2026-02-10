@@ -30,7 +30,7 @@
             authDomain: "your-project.firebaseapp.com",
             databaseURL: "https://your-project-default-rtdb.firebaseio.com",
             projectId: "your-project",
-            storageBucket: "your-project.firebasestorage.app",
+            storageBucket: "your-project.appspot.com",
             messagingSenderId: "YOUR_SENDER_ID",
             appId: "YOUR_APP_ID"
         };
