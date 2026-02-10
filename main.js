@@ -518,7 +518,8 @@ function updatePlayerPresence() {
 // ============================================================================
 
 function generateGameCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude similar looking chars
+  // Exclude visually similar characters: 0/O, 1/I/L are removed to avoid confusion
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
   for (let i = 0; i < GAME_CODE_LENGTH; i++) {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
