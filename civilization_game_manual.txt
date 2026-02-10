@@ -1,0 +1,214 @@
+CIVILIZATION
+Complete Expert Rulebook (Final Printable Edition)
+1. INTRODUCTION
+Civilization is a strategy card-and-dice game about building a powerful empire without letting it
+collapse under its own weight. You are not only competing against other players—you are
+fighting internal pressures such as population strain, civil unrest, rebellion, famine, and economic
+collapse.
+Military strength alone will not win the game. Large armies increase population. Population
+increases unrest. Unrest leads to rebellion. Victory belongs to the ruler who can expand,
+dominate, and still keep their civilization stable.
+Wars are not decided in a single battle. Civilizations fall slowly through siege, exhaustion, and
+internal revolt.
+2. OBJECTIVE
+The game ends when only one civilization remains and that civilization successfully survives
+two full additional rounds without:
+• A rebellion
+• An economic collapse
+If the final civilization fails, the game continues among the remaining players.
+3. COMPONENTS
+Each player has:
+• One personal civilization deck (never mixed with others)
+• Two Emergency Cards (face down, unknown)
+• Dice (shared or personal)
+• A stat tracker (paper, board, or sheet)
+4. CORE STATS
+Each civilization is defined by seven core stats, all of which must be tracked:
+1. 2. 3. 4. 5. 6. 7. Civil Unrest – instability and rebellion risk
+Economy – total value of red cards in hand
+Military – total value of black cards in hand
+Food – produced by farms and stored
+Luxury – purchased with economy, boosts morale
+Morale – recalculated each round
+Population – recalculated each round
+5. SETUP
+1. 2. 3. 4. 5. Each player shuffles their personal deck
+Each player draws 4 starting cards
+Each player receives 2 Emergency Cards, placed face down
+All stats begin at 0
+Choose a starting player randomly
+6. CARDS AND HAND LIMIT
+• Red cards contribute to Economy
+• Black cards contribute to Military
+Card values:
+• Ace = 1
+• Number cards = face value
+• Face cards = 10
+You may never hold more than 10 cards in your hand.
+Discarding:
+• You may only discard during the Discard & Cleanup Phase
+• You must discard immediately if over the limit
+Cards are never traded between players.
+7. ROUND STRUCTURE
+Each round follows the same phases, in this exact order.
+All players must complete a phase before moving to the next.
+PHASE 1: UPKEEP PHASE (SIMULTANEOUS)
+1. Food Production
+Each farm produces 20 food, unless under siege.
+2. Morale Calculation
+Morale = Luxury + Food at the start of the round
+2.
+3. Population Calculation
+Population =
+⌊ (Luxury × √Food) ÷ (Morale ÷ 10 + 1) ⌋
++ Military
+3.
+4. Population Pressure Unrest
+o Population 30–49 → +2 Unrest
+o Population 50–74 → +4 Unrest
+o Population 75–99 → +7 Unrest
+o Population 100+ → +10 Unrest
+PHASE 2: INTERNAL PRESSURE PHASE
+Automatic Unrest Gains
+• Food Stress
+o If Food < Population x 2 → +5 Unrest
+o If Food < Population x 4 → +10 Unrest instead
+• Siege Pressure
+o +8 Unrest per round under siege
+• Economic Collapse Pressure
+o If you have 0 economy cards → +10 Unrest per round
+Civil Unrest Threshold Effects
+• 30+ Unrest – Lose 1 State Action
+• 50+ Unrest – No trading or buying luxury
+• 75+ Unrest – Vulnerable to Foreign Interference
+• 100+ Unrest – Rebellion begins immediately
+Foreign Interference
+• Available at 75+ Unrest
+• 1 economy → +1 unrest
+• Each player may interfere once per round
+• Maximum +10 unrest per target per round
+PHASE 3: STATE ACTION PHASE (TURN ORDER)
+You may take up to 2 State Actions, minus penalties.
+Only one action per category per round.
+Action categories:
+• Economic: Buy cards, farms, or luxury
+• Military: Commit troops, declare war
+• Domestic: Reduce unrest, stabilize population
+• Diplomatic: Trades, treaties
+• Emergency: Play Emergency Cards
+ECONOMY & PURCHASING
+• Cards: 2 economy per card
+• Farms: 5 economy
+• Luxury: 1 economy per luxury
+Luxury rolls:
+• Each luxury purchased = 1 die roll
+• Add results to luxury pool
+Economic Collapse
+If you have 0 economy cards, choose:
+o Draw emergency card +30 unrest if card drawn is red nothing happens, if card
+drawn is black then civil unrest +30
+Or
+o +20 unrest
+PHASE 4: WAR PHASE (TURN ORDER)
+Wars create a War Track starting at 0.
+Military Commitment
+Military cards are assigned to:
+• Frontline
+• Garrison (+2 rebellion suppression per card)
+• Reserve
+Cards are locked until the war ends.
+Battles & Casualties
+• Attacker wins ties
+• Casualty die:
+o 1 → lose 1/6 troops
+o 2 → lose 2/6
+o 6 → lose all troops
+WAR PROGRESS TRACK
+• Minor victory → +1
+• Clear victory → +2
+• Victory during siege → +2
+Stages
+• 0–2 Border Conflict
+• 3–4 Siege State
+• 5–6 Capital Threatened
+• 7 Civilization Collapse
+OCCUPATION RULE (NEW)
+When a civilization collapses, the conquering player must immediately assign an Occupation
+Force.
+• Minimum occupation: 10 military value
+• Occupation troops are removed from your available military
+• Occupied civilizations:
+o Generate +5 Unrest per round for the occupier
+o May trigger rebellion if occupation is too weak
+If occupation troops are withdrawn:
+• The conquered civilization immediately rebels
+Occupation forces may only be removed if:
+• The game ends
+• The civilization is fully stabilized by special effects
+PHASE 5: REBELLION PHASE (UPDATED)
+When Unrest reaches 100+, a rebellion begins.
+Rebellion Track
+• Rebellion starts at 2
+• If the track reaches 0 → rebellion is crushed
+• If the track reaches 6 → civilization collapses
+Dice Pools
+Rebellion Dice
+• Base: 2
+• +1 if Population ≥ 75
+• +1 if under siege
+• +1 if food shortage
+• +1 if War Track ≥ 5
+Government Dice
+• Base: 2
+• +1 per 20 military committed
+• +1 if Emergency Card used
+Rebellion Stages (One Per Round)
+Stage 1: Civil Disorder
+• Lose 1 State Action
+• Rebellion win → Track +1
+• Government win → Track −1
+Stage 2: Armed Uprising
+• No buying or trading
+• Rebellion win → Track +2
+• Government win → Track −1
+Stage 3: Regime Collapse
+• Rebellion win → Track +2
+• Government win → Track −2
+Resolve until track reaches 0 or 6.
+PHASE 6: NATURAL EVENTS (OPTIONAL)
+Roll 1 die to pick affected player, 1 die for category:
+• Drought → halve farm production
+• Plague → reduce morale by 5
+• Earthquake → discard 1 farm/facility
+• Flood → lose 10 food
+PHASE 7: DISCARD & CLEANUP (SIMULTANEOUS)
+• Discard to 10 cards
+• Resolve delayed trades
+• Remove expired effects
+TRADING
+• No card trading
+• Trade economy, food, luxury, or effects
+• 1 initiated trade per round
+• Breaking a deal → +10 Unrest
+FINAL STAT CHECKLIST
+Core Stats
+• Civil Unrest
+• Economy
+• Military
+• Food
+• Luxury
+• Morale
+• Population
+Additional Tracking
+• Farms
+• War Tracks
+• Occupations
+• Sieges
+• Emergency Cards
+• Rebellion Track
+• Trade obligations
+CLOSING NOTE
+Civilization is about knowing how far you can push before everything breaks.
+Conquest creates responsibility.
+Growth creates instability.
+Power demands control.
