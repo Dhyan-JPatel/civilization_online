@@ -99,7 +99,7 @@ function calculateMilitary(hand) {
   return hand.filter(card => card.type === 'military').reduce((sum, card) => sum + card.value, 0);
 }
 
-// Calculate morale
+// Calculate morale (per rulebook: Morale = Luxury + Food)
 function calculateMorale(luxury, food) {
   return Math.floor(luxury + food);
 }
@@ -1192,12 +1192,14 @@ async function processInternalPressurePhase() {
     Object.keys(gameData.players).forEach(playerId => {
       const player = gameData.players[playerId];
       
-      // Food Stress
+      // Food Stress (per rulebook)
       const pop = player.stats.population;
       const food = player.stats.food;
       if (food < pop * 2) {
+        // Severe shortage: +10 unrest
         player.stats.unrest += 10;
       } else if (food < pop * 4) {
+        // Moderate shortage: +5 unrest
         player.stats.unrest += 5;
       }
       
