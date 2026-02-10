@@ -152,16 +152,63 @@ const firebaseConfig = window.__FIREBASE_CONFIG__ || {
   appId: "PLACEHOLDER_APP_ID"
 };
 
+// Validate Firebase configuration
+function validateFirebaseConfig(config) {
+  const requiredFields = ['apiKey', 'authDomain', 'databaseURL', 'projectId', 'storageBucket', 'appId'];
+  const placeholderPatterns = ['PLACEHOLDER', 'YOUR_', 'your-project'];
+  
+  for (const field of requiredFields) {
+    if (!config[field]) {
+      return false;
+    }
+    // Check if the field contains any placeholder patterns
+    const fieldValue = String(config[field]);
+    for (const pattern of placeholderPatterns) {
+      if (fieldValue.includes(pattern)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 let app;
 let database;
+let firebaseInitialized = false;
 
 try {
+  if (!validateFirebaseConfig(firebaseConfig)) {
+    throw new Error('Firebase configuration contains placeholder values. Please configure firebase-config-loader.js with your actual Firebase project settings.');
+  }
   app = initializeApp(firebaseConfig);
   database = getDatabase(app);
+  firebaseInitialized = true;
   console.log('Firebase initialized successfully');
 } catch (error) {
   console.error('Firebase initialization failed:', error);
-  alert('Failed to connect to Firebase. Please check configuration.');
+  firebaseInitialized = false;
+  // Show error to user
+  setTimeout(() => {
+    const appDiv = document.getElementById('app');
+    if (appDiv) {
+      appDiv.innerHTML = `
+        <div style="padding: 20px; text-align: center;">
+          <h1 style="color: red;">⚠️ Configuration Required</h1>
+          <p style="font-size: 18px; margin: 20px 0;">Firebase is not configured.</p>
+          <p style="margin: 10px 0;">To run this application:</p>
+          <ol style="text-align: left; max-width: 600px; margin: 20px auto;">
+            <li>Create a Firebase project at <a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a></li>
+            <li>Enable Realtime Database in your Firebase project</li>
+            <li>Copy your Firebase configuration from Project Settings</li>
+            <li>Edit <code>firebase-config-loader.js</code> and replace the placeholder values with your actual Firebase configuration</li>
+            <li>Reload this page</li>
+          </ol>
+          <p style="margin: 20px 0; color: #666;">See <strong>DEPLOYMENT.md</strong> for detailed instructions.</p>
+          <p style="margin: 10px 0; color: #999; font-size: 14px;">Error: ${error.message}</p>
+        </div>
+      `;
+    }
+  }, 100);
 }
 
 // ============================================================================
@@ -387,7 +434,14 @@ function initializeEventListeners() {
   });
   
   // Host advance phase
-  btnAdvancePhase.addEventListener('click', advancePhase);
+  btnAdvancePhase.addEventListener('click', async () => {
+    try {
+      await advancePhase();
+    } catch (error) {
+      console.error('Error advancing phase:', error);
+      alert(`❌ Error advancing phase: ${error.message}`);
+    }
+  });
   
   // Allow Enter key in inputs
   joinGameCodeInput.addEventListener('keypress', (e) => {
@@ -470,6 +524,11 @@ function attemptReconnect() {
 // ============================================================================
 
 async function handleCreateGame() {
+  if (!firebaseInitialized) {
+    alert('❌ Firebase is not initialized. Please check configuration.');
+    return;
+  }
+  
   const enteredKey = creatorKeyInput.value.trim();
   const playerName = createPlayerNameInput.value.trim();
   
@@ -561,6 +620,11 @@ async function handleCreateGame() {
 // ============================================================================
 
 async function handleJoinGame() {
+  if (!firebaseInitialized) {
+    alert('❌ Firebase is not initialized. Please check configuration.');
+    return;
+  }
+  
   const gameCode = joinGameCodeInput.value.trim().toUpperCase();
   const playerName = joinPlayerNameInput.value.trim();
   
@@ -1233,7 +1297,7 @@ async function advancePhase() {
   
   let gameOver = false;
   
-  await runTransaction(gameRef, (gameData) => {
+  const result = await runTransaction(gameRef, (gameData) => {
     if (!gameData) return;
     
     // Server-side security check: Only host can advance phases
@@ -1294,10 +1358,9 @@ async function advancePhase() {
     return;
   }
   
-  // Auto-process new phase if needed
-  const snapshot = await get(gameRef);
-  if (snapshot.exists()) {
-    const gameData = snapshot.val();
+  // Auto-process new phase if needed (use committed data from transaction)
+  if (result.committed && result.snapshot.exists()) {
+    const gameData = result.snapshot.val();
     if (gameData.phase === 'UPKEEP') {
       await processUpkeepPhase();
     } else if (gameData.phase === 'INTERNAL_PRESSURE') {
