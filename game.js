@@ -481,7 +481,8 @@ async function performWar() {
           if (attackerMilitary > defenderMilitary) {
             // Attacker victory
             const margin = attackerMilitary - defenderMilitary;
-            if (margin >= defenderMilitary / 2) {
+            // Clear victory if margin is at least 50% of defender's military (or defender has 0)
+            if (defenderMilitary === 0 || margin >= defenderMilitary / 2) {
               trackIncrease = 2; // Clear victory
             } else {
               trackIncrease = 1; // Minor victory
@@ -489,10 +490,8 @@ async function performWar() {
             
             // Casualty roll for defender
             const casualtyDie = Math.floor(Math.random() * 6) + 1;
-            const casualtyFraction = casualtyDie === 6 ? 1 : casualtyDie / 6;
-            
-            // Remove military cards from defender's hand based on casualties
-            const cardsToRemove = Math.floor(target.hand.filter(c => c.type === 'military').length * casualtyFraction);
+            // Map die roll to number of cards to remove (out of 6)
+            const cardsToRemove = Math.floor(target.hand.filter(c => c.type === 'military').length * casualtyDie / 6);
             for (let i = 0; i < cardsToRemove; i++) {
               const militaryCardIndex = target.hand.findIndex(c => c.type === 'military');
               if (militaryCardIndex !== -1) {
@@ -506,10 +505,8 @@ async function performWar() {
             
             // Casualty roll for attacker
             const casualtyDie = Math.floor(Math.random() * 6) + 1;
-            const casualtyFraction = casualtyDie === 6 ? 1 : casualtyDie / 6;
-            
-            // Remove military cards from attacker's hand
-            const cardsToRemove = Math.floor(player.hand.filter(c => c.type === 'military').length * casualtyFraction);
+            // Map die roll to number of cards to remove (out of 6)
+            const cardsToRemove = Math.floor(player.hand.filter(c => c.type === 'military').length * casualtyDie / 6);
             for (let i = 0; i < cardsToRemove; i++) {
               const militaryCardIndex = player.hand.findIndex(c => c.type === 'military');
               if (militaryCardIndex !== -1) {
@@ -824,6 +821,16 @@ async function checkVictory() {
     
     const alivePlayers = Object.values(game.players).filter(p => !p.collapsed);
     
+    // Check for multiple players alive during victory countdown
+    if (alivePlayers.length > 1 && game.victoryCountdown) {
+      // Multiple players alive again, reset countdown
+      await update(gameRef, {
+        victoryCountdown: null
+      });
+      console.log('⚠️ Victory countdown cancelled - multiple civilizations remain');
+      return;
+    }
+    
     if (alivePlayers.length === 1) {
       const winner = alivePlayers[0];
       
@@ -873,12 +880,6 @@ async function checkVictory() {
         draw: true
       });
       console.log('Game ended in a draw - all civilizations collapsed');
-    } else if (alivePlayers.length > 1 && game.victoryCountdown) {
-      // Multiple players alive again, reset countdown
-      await update(gameRef, {
-        victoryCountdown: null
-      });
-      console.log('⚠️ Victory countdown cancelled - multiple civilizations remain');
     }
   } catch (error) {
     console.error('❌ Failed to check victory:', error);
@@ -1112,10 +1113,7 @@ async function sendTradeOffer(targetPlayerId, offer, request) {
       }
       
       // Validate player has resources to offer
-      // Note: We don't deduct yet, only when trade is accepted
-      if (offer.economy > 0 && player.stats.economy < offer.economy) {
-        throw new Error('Not enough economy to offer');
-      }
+      // Note: Economy comes from cards which cannot be traded
       if (offer.food > 0 && player.stats.food < offer.food) {
         throw new Error('Not enough food to offer');
       }
@@ -1128,7 +1126,7 @@ async function sendTradeOffer(targetPlayerId, offer, request) {
         game.tradeOffers = {};
       }
       
-      const tradeId = `trade_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+      const tradeId = push(ref(db, `games/${currentGameCode}/tradeOffers`)).key;
       game.tradeOffers[tradeId] = {
         id: tradeId,
         fromId: currentPlayerId,
@@ -1184,19 +1182,18 @@ async function acceptTradeOffer(tradeId) {
       }
       
       // Validate both players still have the resources
-      if (sender.stats.economy < trade.offer.economy ||
-          sender.stats.food < trade.offer.food ||
+      // Note: Economy comes from cards which cannot be traded
+      if (sender.stats.food < trade.offer.food ||
           sender.stats.luxury < trade.offer.luxury) {
         throw new Error('Sender no longer has offered resources');
       }
       
-      if (receiver.stats.economy < trade.request.economy ||
-          receiver.stats.food < trade.request.food ||
+      if (receiver.stats.food < trade.request.food ||
           receiver.stats.luxury < trade.request.luxury) {
         throw new Error('You no longer have requested resources');
       }
       
-      // Execute trade
+      // Execute trade - transfer food and luxury only
       sender.stats.food -= trade.offer.food;
       sender.stats.luxury -= trade.offer.luxury;
       receiver.stats.food += trade.offer.food;
@@ -1206,9 +1203,6 @@ async function acceptTradeOffer(tradeId) {
       receiver.stats.luxury -= trade.request.luxury;
       sender.stats.food += trade.request.food;
       sender.stats.luxury += trade.request.luxury;
-      
-      // Note: Economy from cards can't be traded directly
-      // The offer/request economy represents "value" but cards stay with players
       
       trade.status = 'accepted';
       

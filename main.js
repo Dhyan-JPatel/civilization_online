@@ -502,6 +502,35 @@ function updateTradeModal() {
   
   // Update target select
   const targetSelect = document.getElementById('tradeTargetSelect');
+}
+
+// Make trade functions available globally for onclick handlers
+window.acceptTrade = (tradeId) => {
+  acceptTradeOffer(tradeId);
+};
+
+window.rejectTrade = (tradeId) => {
+  rejectTradeOffer(tradeId);
+};
+
+// Helper function to format resources for display
+function formatResources(resources) {
+  const parts = [];
+  if (resources.food) parts.push(`${resources.food} Food`);
+  if (resources.luxury) parts.push(`${resources.luxury} Luxury`);
+  if (resources.economy) parts.push(`${resources.economy} Economy`);
+  return parts.join(', ') || 'Nothing';
+}
+
+// Update Trade Modal
+function updateTradeModal() {
+  if (!currentGame) return;
+  
+  const playerId = getCurrentPlayerId();
+  if (!playerId) return;
+  
+  // Update target select
+  const targetSelect = document.getElementById('tradeTargetSelect');
   targetSelect.innerHTML = '<option value="">Select player...</option>';
   
   Object.values(currentGame.players).forEach(p => {
@@ -529,8 +558,8 @@ function updateTradeModal() {
       tradeDiv.className = 'trade-offer';
       tradeDiv.innerHTML = `
         <p><strong>From ${trade.fromName}:</strong></p>
-        <p>Offers: ${trade.offer.food ? `${trade.offer.food} Food ` : ''}${trade.offer.luxury ? `${trade.offer.luxury} Luxury ` : ''}${trade.offer.economy ? `${trade.offer.economy} Economy ` : ''}</p>
-        <p>Requests: ${trade.request.food ? `${trade.request.food} Food ` : ''}${trade.request.luxury ? `${trade.request.luxury} Luxury ` : ''}${trade.request.economy ? `${trade.request.economy} Economy ` : ''}</p>
+        <p>Offers: ${formatResources(trade.offer)}</p>
+        <p>Requests: ${formatResources(trade.request)}</p>
         <button class="btn btn-success" onclick="window.acceptTrade('${trade.id}')">Accept</button>
         <button class="btn btn-danger" onclick="window.rejectTrade('${trade.id}')">Reject</button>
       `;
@@ -538,15 +567,6 @@ function updateTradeModal() {
     });
   }
 }
-
-// Make trade functions available globally for onclick handlers
-window.acceptTrade = (tradeId) => {
-  acceptTradeOffer(tradeId);
-};
-
-window.rejectTrade = (tradeId) => {
-  rejectTradeOffer(tradeId);
-};
 
 // Update Rebellion Modal
 function updateRebellionModal() {
