@@ -1086,11 +1086,19 @@ async function buyLuxury() {
 async function playCard(cardIndex) {
   if (!db || !currentGameCode || !currentPlayerId) return;
 
-  const playerRef = ref(db, `games/${currentGameCode}/players/${currentPlayerId}`);
+  const gameRef = ref(db, `games/${currentGameCode}`);
   
   try {
-    await runTransaction(playerRef, (player) => {
-      if (!player) return player;
+    await runTransaction(gameRef, (game) => {
+      if (!game) return game;
+      
+      // Phase validation - cards can only be discarded during CLEANUP phase
+      if (game.phase !== 'CLEANUP') {
+        throw new Error('Can only discard cards during CLEANUP phase');
+      }
+      
+      const player = game.players[currentPlayerId];
+      if (!player) return game;
       
       if (cardIndex < 0 || cardIndex >= player.hand.length) {
         throw new Error(`Card index ${cardIndex} is out of range (hand size: ${player.hand.length})`);
@@ -1107,7 +1115,7 @@ async function playCard(cardIndex) {
       player.hand.splice(cardIndex, 1);
       player.discardPile.push(card);
       
-      return player;
+      return game;
     });
     
     console.log(`✅ Played card`);
