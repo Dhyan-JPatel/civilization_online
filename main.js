@@ -486,31 +486,52 @@ async function handleCreateGame() {
   showScreen('loading');
   
   try {
-    // Generate unique game code
-    const gameCode = generateGameCode();
     const playerId = generatePlayerId();
+    let gameCode = null;
+    let attempts = 0;
+    const maxAttempts = 5;
     
-    // Create game structure
-    const gameData = {
-      phase: 'SETUP',
-      locked: false,
-      hostId: playerId,
-      turnOrder: [playerId],
-      currentTurnIndex: 0,
-      round: 0,
-      naturalEventsEnabled: naturalEventsToggle.checked,
-      maxPlayers: MAX_PLAYERS,
-      meta: {
-        createdAt: serverTimestamp()
-      },
-      players: {
-        [playerId]: createPlayerData(playerName)
+    // Try to create game with unique code (with collision detection)
+    while (!gameCode && attempts < maxAttempts) {
+      const candidateCode = generateGameCode();
+      const gameRef = ref(database, `games/${candidateCode}`);
+      
+      // Use transaction to check if code exists
+      const result = await runTransaction(gameRef, (currentData) => {
+        if (currentData !== null) {
+          // Code already exists, abort this transaction
+          return; // This will fail the transaction
+        }
+        
+        // Code is available, create the game
+        return {
+          phase: 'SETUP',
+          locked: false,
+          hostId: playerId,
+          turnOrder: [playerId],
+          currentTurnIndex: 0,
+          round: 0,
+          naturalEventsEnabled: naturalEventsToggle.checked,
+          maxPlayers: MAX_PLAYERS,
+          meta: {
+            createdAt: serverTimestamp()
+          },
+          players: {
+            [playerId]: createPlayerData(playerName)
+          }
+        };
+      });
+      
+      if (result.committed) {
+        gameCode = candidateCode;
+      } else {
+        attempts++;
       }
-    };
+    }
     
-    // Write to database using transaction for safety
-    const gameRef = ref(database, `games/${gameCode}`);
-    await set(gameRef, gameData);
+    if (!gameCode) {
+      throw new Error('Failed to generate unique game code after multiple attempts');
+    }
     
     // Save to state and localStorage
     currentGameCode = gameCode;
