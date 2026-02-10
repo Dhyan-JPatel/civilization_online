@@ -385,9 +385,22 @@ function updateGameUI(game) {
   document.getElementById('actionTrade').disabled = !isStateActionsPhase;
   
   // Update action hint
-  const hintText = isStateActionsPhase ? 
+  let hintText = isStateActionsPhase ? 
     'Take your actions for this round' : 
     `Current phase: ${game.phase}`;
+  
+  // Add natural event info if present
+  if (game.lastNaturalEvent && game.lastNaturalEvent.round === game.round) {
+    const event = game.lastNaturalEvent;
+    const eventEmojis = {
+      drought: '🌵',
+      plague: '🦠',
+      earthquake: '🌋',
+      flood: '🌊'
+    };
+    hintText += ` | ${eventEmojis[event.event] || '⚠️'} ${event.event.toUpperCase()} affected ${event.targetName}`;
+  }
+  
   document.getElementById('actionHint').textContent = hintText;
   
   // Show/hide host controls
@@ -417,7 +430,26 @@ function updateGameUI(game) {
   // Check for victory
   if (game.gameOver) {
     showVictoryBanner(game);
+  } else if (game.victoryCountdown) {
+    showVictoryCountdown(game.victoryCountdown);
+  } else {
+    hideVictoryCountdown();
   }
+}
+
+// Show Victory Countdown
+function showVictoryCountdown(countdown) {
+  const banner = document.getElementById('victoryBanner');
+  const message = document.getElementById('victoryMessage');
+  
+  message.textContent = `🏁 ${countdown.winnerName} is the last standing! Must survive ${countdown.roundsRemaining} more round(s) to win!`;
+  banner.classList.remove('hidden');
+}
+
+// Hide Victory Countdown
+function hideVictoryCountdown() {
+  const banner = document.getElementById('victoryBanner');
+  banner.classList.add('hidden');
 }
 
 // Update War Modal

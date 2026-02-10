@@ -433,6 +433,7 @@ async function resetActions() {
         declaredWar: false,
         traded: false
       };
+      updates[`${playerId}/interferenceThisRound`] = {};
     }
     
     await update(gameRef, updates);
@@ -825,18 +826,59 @@ async function checkVictory() {
     
     if (alivePlayers.length === 1) {
       const winner = alivePlayers[0];
-      await update(gameRef, {
-        winner: winner.id,
-        winnerName: winner.name,
-        gameOver: true
-      });
-      console.log(`🏆 ${winner.name} wins!`);
+      
+      // Check if we're already in victory countdown
+      if (game.victoryCountdown) {
+        game.victoryCountdown.roundsRemaining--;
+        
+        // Check if winner still qualifies (no active rebellion, positive economy)
+        const stillQualifies = !winner.rebellion && winner.stats.economy >= 0;
+        
+        if (!stillQualifies) {
+          // Winner disqualified, reset countdown
+          await update(gameRef, {
+            victoryCountdown: null
+          });
+          console.log('⚠️ Victory countdown reset - winner disqualified');
+        } else if (game.victoryCountdown.roundsRemaining <= 0) {
+          // Winner survived 2 rounds!
+          await update(gameRef, {
+            winner: winner.id,
+            winnerName: winner.name,
+            gameOver: true,
+            victoryCountdown: null
+          });
+          console.log(`🏆 ${winner.name} wins!`);
+        } else {
+          // Update countdown
+          await update(gameRef, {
+            victoryCountdown: game.victoryCountdown
+          });
+          console.log(`⏳ Victory countdown: ${game.victoryCountdown.roundsRemaining} rounds remaining`);
+        }
+      } else {
+        // Start victory countdown
+        await update(gameRef, {
+          victoryCountdown: {
+            winnerId: winner.id,
+            winnerName: winner.name,
+            roundsRemaining: 2
+          }
+        });
+        console.log(`🏁 ${winner.name} is the last standing! Must survive 2 more rounds to win.`);
+      }
     } else if (alivePlayers.length === 0) {
       await update(gameRef, {
         gameOver: true,
         draw: true
       });
       console.log('Game ended in a draw - all civilizations collapsed');
+    } else if (alivePlayers.length > 1 && game.victoryCountdown) {
+      // Multiple players alive again, reset countdown
+      await update(gameRef, {
+        victoryCountdown: null
+      });
+      console.log('⚠️ Victory countdown cancelled - multiple civilizations remain');
     }
   } catch (error) {
     console.error('❌ Failed to check victory:', error);
