@@ -375,11 +375,12 @@ async function performInternalPressure() {
         const player = game.players[playerId];
         if (player.collapsed) continue;
         
-        // Food stress
+        // Food stress - if-else ensures only one penalty applies
+        // Most severe shortage (< pop × 2) gets highest penalty
         if (player.stats.food < player.stats.population * 2) {
-          player.stats.unrest += 10;
+          player.stats.unrest += 10; // Severe food shortage
         } else if (player.stats.food < player.stats.population * 4) {
-          player.stats.unrest += 5;
+          player.stats.unrest += 5; // Moderate food shortage
         }
         
         // Siege pressure
@@ -433,6 +434,7 @@ async function resetActions() {
         traded: false
       };
       updates[`${playerId}/interferenceThisRound`] = {};
+      updates[`${playerId}/lastLuxuryRoll`] = null; // Clear stale dice result
     }
     
     await update(gameRef, updates);
