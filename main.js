@@ -1232,10 +1232,10 @@ async function advancePhase() {
   await runTransaction(gameRef, (gameData) => {
     if (!gameData) return;
     
-    // Verify host in transaction (prevent console manipulation)
+    // Server-side security check: Only host can advance phases
+    // This is the authoritative check; client-side isHost is just for UX
     if (gameData.hostId !== currentPlayerId) {
-      // Transaction will silently abort, validation happens client-side before this
-      return undefined;
+      return undefined; // Abort transaction if non-host tries to advance
     }
     
     // Check for game over
