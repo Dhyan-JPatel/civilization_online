@@ -318,7 +318,14 @@ async function performUpkeep() {
         // Food production (20 per farm, unless sieged)
         const isSieged = Object.values(player.wars || {}).some(war => war.track >= 3);
         if (!isSieged) {
-          player.stats.food += player.stats.farms * 20;
+          const foodProduction = player.stats.farms * 20;
+          // Check for drought effect
+          if (player.droughtNextRound) {
+            player.stats.food += Math.floor(foodProduction / 2);
+            player.droughtNextRound = false;
+          } else {
+            player.stats.food += foodProduction;
+          }
         }
         
         // Calculate stats
@@ -426,12 +433,282 @@ async function resetActions() {
         declaredWar: false,
         traded: false
       };
+      updates[`${playerId}/interferenceThisRound`] = {};
     }
     
     await update(gameRef, updates);
     console.log('✅ Actions reset');
   } catch (error) {
     console.error('❌ Failed to reset actions:', error);
+  }
+}
+
+// Perform War Phase
+async function performWar() {
+  if (!db || !currentGameCode) return;
+
+  const gameRef = ref(db, `games/${currentGameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (game) => {
+      if (!game) return game;
+      
+      // Process all active wars
+      for (const playerId in game.players) {
+        const player = game.players[playerId];
+        if (player.collapsed) continue;
+        
+        // Process each war this player is involved in
+        for (const targetId in player.wars || {}) {
+          const war = player.wars[targetId];
+          const target = game.players[targetId];
+          
+          if (!target || target.collapsed) {
+            // War ended because target collapsed
+            delete player.wars[targetId];
+            continue;
+          }
+          
+          // Only process once (when attacker has lower ID to avoid double processing)
+          if (playerId > targetId) continue;
+          
+          // Battle resolution: compare military
+          const attackerMilitary = player.stats.military;
+          const defenderMilitary = target.stats.military;
+          
+          let trackIncrease = 0;
+          
+          if (attackerMilitary > defenderMilitary) {
+            // Attacker victory
+            const margin = attackerMilitary - defenderMilitary;
+            // Clear victory if margin is at least 50% of defender's military (or defender has 0)
+            if (defenderMilitary === 0 || margin >= defenderMilitary / 2) {
+              trackIncrease = 2; // Clear victory
+            } else {
+              trackIncrease = 1; // Minor victory
+            }
+            
+            // Casualty roll for defender
+            const casualtyDie = Math.floor(Math.random() * 6) + 1;
+            // Map die roll to number of cards to remove (out of 6)
+            const cardsToRemove = Math.floor(target.hand.filter(c => c.type === 'military').length * casualtyDie / 6);
+            for (let i = 0; i < cardsToRemove; i++) {
+              const militaryCardIndex = target.hand.findIndex(c => c.type === 'military');
+              if (militaryCardIndex !== -1) {
+                const removedCard = target.hand.splice(militaryCardIndex, 1)[0];
+                target.discardPile.push(removedCard);
+              }
+            }
+          } else if (defenderMilitary > attackerMilitary) {
+            // Defender victory - war track decreases
+            trackIncrease = -1;
+            
+            // Casualty roll for attacker
+            const casualtyDie = Math.floor(Math.random() * 6) + 1;
+            // Map die roll to number of cards to remove (out of 6)
+            const cardsToRemove = Math.floor(player.hand.filter(c => c.type === 'military').length * casualtyDie / 6);
+            for (let i = 0; i < cardsToRemove; i++) {
+              const militaryCardIndex = player.hand.findIndex(c => c.type === 'military');
+              if (militaryCardIndex !== -1) {
+                const removedCard = player.hand.splice(militaryCardIndex, 1)[0];
+                player.discardPile.push(removedCard);
+              }
+            }
+          } else {
+            // Tie - attacker wins ties
+            trackIncrease = 1;
+          }
+          
+          // Update war tracks
+          war.track = Math.max(0, Math.min(7, war.track + trackIncrease));
+          const mirrorWar = target.wars[playerId];
+          if (mirrorWar) {
+            mirrorWar.track = war.track;
+          }
+          
+          // Check for siege (track 3+)
+          if (war.track >= 3) {
+            // Siege effects handled in UPKEEP (no food production)
+            // and INTERNAL_PRESSURE (+8 unrest)
+          }
+          
+          // Check for occupation (track 7)
+          if (war.track >= 7) {
+            target.collapsed = true;
+            target.collapseReason = `Occupied by ${player.name}`;
+            
+            // Occupying player gets +5 unrest per round
+            player.stats.unrest += 5;
+          }
+        }
+      }
+      
+      return game;
+    });
+    
+    console.log('✅ War phase completed');
+  } catch (error) {
+    console.error('❌ War phase failed:', error);
+  }
+}
+
+// Perform Rebellion Phase
+async function performRebellion() {
+  if (!db || !currentGameCode) return;
+
+  const gameRef = ref(db, `games/${currentGameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (game) => {
+      if (!game) return game;
+      
+      for (const playerId in game.players) {
+        const player = game.players[playerId];
+        if (player.collapsed || !player.rebellion) continue;
+        
+        const rebellion = player.rebellion;
+        
+        // Calculate rebel dice pool
+        let rebelDice = 2; // Base
+        if (player.stats.population >= 75) rebelDice += 1;
+        const isSieged = Object.values(player.wars || {}).some(war => war.track >= 3);
+        if (isSieged) rebelDice += 1;
+        if (player.stats.food < player.stats.population) rebelDice += 1;
+        const hasHighWarTrack = Object.values(player.wars || {}).some(war => war.track >= 5);
+        if (hasHighWarTrack) rebelDice += 1;
+        
+        // Calculate government dice pool
+        let govDice = 2; // Base
+        govDice += Math.floor(player.stats.military / 20);
+        
+        // Roll dice
+        let rebelTotal = 0;
+        for (let i = 0; i < rebelDice; i++) {
+          rebelTotal += Math.floor(Math.random() * 6) + 1;
+        }
+        
+        let govTotal = 0;
+        for (let i = 0; i < govDice; i++) {
+          govTotal += Math.floor(Math.random() * 6) + 1;
+        }
+        
+        // Determine outcome based on stage
+        const stage = rebellion.stage || 1;
+        
+        if (rebelTotal > govTotal) {
+          // Rebels win
+          if (stage === 1) {
+            rebellion.track += 1;
+          } else if (stage === 2) {
+            rebellion.track += 2;
+          } else if (stage === 3) {
+            rebellion.track += 2;
+          }
+        } else {
+          // Government wins
+          if (stage === 1) {
+            rebellion.track -= 1;
+          } else if (stage === 2) {
+            rebellion.track -= 1;
+          } else if (stage === 3) {
+            rebellion.track -= 2;
+          }
+        }
+        
+        // Check rebellion outcomes
+        if (rebellion.track <= 0) {
+          // Rebellion crushed
+          player.rebellion = null;
+          player.stats.unrest = Math.max(0, player.stats.unrest - 20);
+        } else if (rebellion.track >= 6) {
+          // Civilization collapses
+          player.collapsed = true;
+          player.collapseReason = 'Rebellion';
+          player.rebellion = null;
+        } else {
+          // Advance stage
+          if (rebellion.track >= 4 && stage < 3) {
+            rebellion.stage = 3;
+          } else if (rebellion.track >= 2 && stage < 2) {
+            rebellion.stage = 2;
+          }
+        }
+      }
+      
+      return game;
+    });
+    
+    console.log('✅ Rebellion phase completed');
+  } catch (error) {
+    console.error('❌ Rebellion phase failed:', error);
+  }
+}
+
+// Perform Natural Events Phase
+async function performNaturalEvents() {
+  if (!db || !currentGameCode) return;
+
+  const gameRef = ref(db, `games/${currentGameCode}`);
+  
+  try {
+    const snapshot = await get(gameRef);
+    const game = snapshot.val();
+    
+    if (!game || !game.naturalEventsEnabled) {
+      console.log('⏭️ Natural events disabled');
+      return;
+    }
+    
+    await runTransaction(gameRef, (game) => {
+      if (!game) return game;
+      
+      const alivePlayers = Object.keys(game.players).filter(id => !game.players[id].collapsed);
+      
+      if (alivePlayers.length === 0) return game;
+      
+      // Select random player
+      const targetIndex = Math.floor(Math.random() * alivePlayers.length);
+      const targetId = alivePlayers[targetIndex];
+      const target = game.players[targetId];
+      
+      // Select random event
+      const eventRoll = Math.floor(Math.random() * 4);
+      const events = ['drought', 'plague', 'earthquake', 'flood'];
+      const event = events[eventRoll];
+      
+      // Apply event effect
+      switch (event) {
+        case 'drought':
+          // Halve farm production next round (mark with flag)
+          target.droughtNextRound = true;
+          break;
+        case 'plague':
+          // Reduce morale by 5
+          target.stats.luxury = Math.max(0, target.stats.luxury - 5);
+          break;
+        case 'earthquake':
+          // Lose 1 farm
+          target.stats.farms = Math.max(0, target.stats.farms - 1);
+          break;
+        case 'flood':
+          // Lose 10 food
+          target.stats.food = Math.max(0, target.stats.food - 10);
+          break;
+      }
+      
+      game.lastNaturalEvent = {
+        targetId: targetId,
+        targetName: target.name,
+        event: event,
+        round: game.round
+      };
+      
+      return game;
+    });
+    
+    console.log('✅ Natural events completed');
+  } catch (error) {
+    console.error('❌ Natural events failed:', error);
   }
 }
 
@@ -475,6 +752,15 @@ async function advancePhase() {
         break;
       case 'STATE_ACTIONS':
         await resetActions();
+        break;
+      case 'WAR':
+        await performWar();
+        break;
+      case 'REBELLION':
+        await performRebellion();
+        break;
+      case 'NATURAL_EVENTS':
+        await performNaturalEvents();
         break;
       case 'CLEANUP':
         await performCleanup();
@@ -535,14 +821,59 @@ async function checkVictory() {
     
     const alivePlayers = Object.values(game.players).filter(p => !p.collapsed);
     
+    // Check for multiple players alive during victory countdown
+    if (alivePlayers.length > 1 && game.victoryCountdown) {
+      // Multiple players alive again, reset countdown
+      await update(gameRef, {
+        victoryCountdown: null
+      });
+      console.log('⚠️ Victory countdown cancelled - multiple civilizations remain');
+      return;
+    }
+    
     if (alivePlayers.length === 1) {
       const winner = alivePlayers[0];
-      await update(gameRef, {
-        winner: winner.id,
-        winnerName: winner.name,
-        gameOver: true
-      });
-      console.log(`🏆 ${winner.name} wins!`);
+      
+      // Check if we're already in victory countdown
+      if (game.victoryCountdown) {
+        game.victoryCountdown.roundsRemaining--;
+        
+        // Check if winner still qualifies (no active rebellion, positive economy)
+        const stillQualifies = !winner.rebellion && winner.stats.economy >= 0;
+        
+        if (!stillQualifies) {
+          // Winner disqualified, reset countdown
+          await update(gameRef, {
+            victoryCountdown: null
+          });
+          console.log('⚠️ Victory countdown reset - winner disqualified');
+        } else if (game.victoryCountdown.roundsRemaining <= 0) {
+          // Winner survived 2 rounds!
+          await update(gameRef, {
+            winner: winner.id,
+            winnerName: winner.name,
+            gameOver: true,
+            victoryCountdown: null
+          });
+          console.log(`🏆 ${winner.name} wins!`);
+        } else {
+          // Update countdown
+          await update(gameRef, {
+            victoryCountdown: game.victoryCountdown
+          });
+          console.log(`⏳ Victory countdown: ${game.victoryCountdown.roundsRemaining} rounds remaining`);
+        }
+      } else {
+        // Start victory countdown
+        await update(gameRef, {
+          victoryCountdown: {
+            winnerId: winner.id,
+            winnerName: winner.name,
+            roundsRemaining: 2
+          }
+        });
+        console.log(`🏁 ${winner.name} is the last standing! Must survive 2 more rounds to win.`);
+      }
     } else if (alivePlayers.length === 0) {
       await update(gameRef, {
         gameOver: true,
@@ -756,6 +1087,216 @@ async function declareWar(targetPlayerId) {
   }
 }
 
+// Send Trade Offer
+async function sendTradeOffer(targetPlayerId, offer, request) {
+  if (!db || !currentGameCode || !currentPlayerId) return;
+
+  const gameRef = ref(db, `games/${currentGameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (game) => {
+      if (!game) return game;
+      
+      const player = game.players[currentPlayerId];
+      const target = game.players[targetPlayerId];
+      
+      if (!player || !target) {
+        throw new Error('Player not found');
+      }
+      
+      if (player.actions.traded) {
+        throw new Error('Already made a trade offer this round');
+      }
+      
+      if (player.stats.unrest >= 50) {
+        throw new Error('Cannot trade with unrest >= 50');
+      }
+      
+      // Validate player has resources to offer
+      // Note: Economy comes from cards which cannot be traded
+      if (offer.food > 0 && player.stats.food < offer.food) {
+        throw new Error('Not enough food to offer');
+      }
+      if (offer.luxury > 0 && player.stats.luxury < offer.luxury) {
+        throw new Error('Not enough luxury to offer');
+      }
+      
+      // Create trade offer
+      if (!game.tradeOffers) {
+        game.tradeOffers = {};
+      }
+      
+      const tradeId = push(ref(db, `games/${currentGameCode}/tradeOffers`)).key;
+      game.tradeOffers[tradeId] = {
+        id: tradeId,
+        fromId: currentPlayerId,
+        fromName: player.name,
+        toId: targetPlayerId,
+        toName: target.name,
+        offer: offer,
+        request: request,
+        status: 'pending',
+        createdAt: Date.now()
+      };
+      
+      player.actions.traded = true;
+      
+      return game;
+    });
+    
+    console.log('✅ Trade offer sent');
+    alert('✅ Trade offer sent!');
+  } catch (error) {
+    console.error('❌ Failed to send trade offer:', error);
+    alert('❌ ' + error.message);
+  }
+}
+
+// Accept Trade Offer
+async function acceptTradeOffer(tradeId) {
+  if (!db || !currentGameCode || !currentPlayerId) return;
+
+  const gameRef = ref(db, `games/${currentGameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (game) => {
+      if (!game || !game.tradeOffers || !game.tradeOffers[tradeId]) {
+        throw new Error('Trade offer not found');
+      }
+      
+      const trade = game.tradeOffers[tradeId];
+      
+      if (trade.status !== 'pending') {
+        throw new Error('Trade already processed');
+      }
+      
+      if (trade.toId !== currentPlayerId) {
+        throw new Error('This trade is not for you');
+      }
+      
+      const sender = game.players[trade.fromId];
+      const receiver = game.players[trade.toId];
+      
+      if (!sender || !receiver) {
+        throw new Error('Player not found');
+      }
+      
+      // Validate both players still have the resources
+      // Note: Economy comes from cards which cannot be traded
+      if (sender.stats.food < trade.offer.food ||
+          sender.stats.luxury < trade.offer.luxury) {
+        throw new Error('Sender no longer has offered resources');
+      }
+      
+      if (receiver.stats.food < trade.request.food ||
+          receiver.stats.luxury < trade.request.luxury) {
+        throw new Error('You no longer have requested resources');
+      }
+      
+      // Execute trade - transfer food and luxury only
+      sender.stats.food -= trade.offer.food;
+      sender.stats.luxury -= trade.offer.luxury;
+      receiver.stats.food += trade.offer.food;
+      receiver.stats.luxury += trade.offer.luxury;
+      
+      receiver.stats.food -= trade.request.food;
+      receiver.stats.luxury -= trade.request.luxury;
+      sender.stats.food += trade.request.food;
+      sender.stats.luxury += trade.request.luxury;
+      
+      trade.status = 'accepted';
+      
+      return game;
+    });
+    
+    console.log('✅ Trade accepted');
+    alert('✅ Trade accepted!');
+  } catch (error) {
+    console.error('❌ Failed to accept trade:', error);
+    alert('❌ ' + error.message);
+  }
+}
+
+// Reject Trade Offer
+async function rejectTradeOffer(tradeId) {
+  if (!db || !currentGameCode || !currentPlayerId) return;
+
+  const gameRef = ref(db, `games/${currentGameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (game) => {
+      if (!game || !game.tradeOffers || !game.tradeOffers[tradeId]) {
+        throw new Error('Trade offer not found');
+      }
+      
+      const trade = game.tradeOffers[tradeId];
+      
+      if (trade.toId !== currentPlayerId) {
+        throw new Error('This trade is not for you');
+      }
+      
+      trade.status = 'rejected';
+      
+      return game;
+    });
+    
+    console.log('✅ Trade rejected');
+    alert('✅ Trade rejected');
+  } catch (error) {
+    console.error('❌ Failed to reject trade:', error);
+    alert('❌ ' + error.message);
+  }
+}
+
+// Foreign Interference
+async function foreignInterference(targetPlayerId) {
+  if (!db || !currentGameCode || !currentPlayerId) return;
+
+  const gameRef = ref(db, `games/${currentGameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (game) => {
+      if (!game) return game;
+      
+      const player = game.players[currentPlayerId];
+      const target = game.players[targetPlayerId];
+      
+      if (!player || !target) {
+        throw new Error('Player not found');
+      }
+      
+      if (target.stats.unrest < 75) {
+        throw new Error('Target must have unrest >= 75');
+      }
+      
+      if (player.stats.economy < 1) {
+        throw new Error('Not enough economy (need 1)');
+      }
+      
+      // Track interference this round
+      if (!player.interferenceThisRound) {
+        player.interferenceThisRound = {};
+      }
+      
+      const currentInterference = player.interferenceThisRound[targetPlayerId] || 0;
+      if (currentInterference >= 10) {
+        throw new Error('Already interfered max amount (10) with this player');
+      }
+      
+      target.stats.unrest += 1;
+      player.interferenceThisRound[targetPlayerId] = currentInterference + 1;
+      
+      return game;
+    });
+    
+    console.log('✅ Foreign interference applied');
+    alert('✅ Foreign interference applied!');
+  } catch (error) {
+    console.error('❌ Failed to apply foreign interference:', error);
+    alert('❌ ' + error.message);
+  }
+}
+
 // Listen to game state
 function listenToGameState(gameCode, callback) {
   if (!db) return;
@@ -814,6 +1355,10 @@ export {
   buyLuxury,
   reduceUnrest,
   declareWar,
+  sendTradeOffer,
+  acceptTradeOffer,
+  rejectTradeOffer,
+  foreignInterference,
   listenToGameState,
   stopListeningToGameState,
   leaveGame,

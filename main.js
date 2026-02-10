@@ -12,6 +12,10 @@ import {
   buyLuxury,
   reduceUnrest,
   declareWar,
+  sendTradeOffer,
+  acceptTradeOffer,
+  rejectTradeOffer,
+  foreignInterference,
   listenToGameState,
   stopListeningToGameState,
   leaveGame,
@@ -99,6 +103,7 @@ function setupEventListeners() {
   document.getElementById('closeTradeModal').addEventListener('click', hideTradeModal);
   document.getElementById('closeRebellionModal').addEventListener('click', hideRebellionModal);
   document.getElementById('btnDeclareWar').addEventListener('click', handleDeclareWar);
+  document.getElementById('btnSendTrade').addEventListener('click', handleSendTrade);
 }
 
 // Handle Create Game
@@ -207,6 +212,49 @@ function handleDeclareWar() {
   
   declareWar(targetId);
   hideWarModal();
+}
+
+// Handle Send Trade
+function handleSendTrade() {
+  const targetId = document.getElementById('tradeTargetSelect').value;
+  if (!targetId) {
+    alert('❌ Please select a player');
+    return;
+  }
+  
+  const offer = {
+    economy: parseInt(document.getElementById('offerEconomy').value) || 0,
+    food: parseInt(document.getElementById('offerFood').value) || 0,
+    luxury: parseInt(document.getElementById('offerLuxury').value) || 0
+  };
+  
+  const request = {
+    economy: parseInt(document.getElementById('requestEconomy').value) || 0,
+    food: parseInt(document.getElementById('requestFood').value) || 0,
+    luxury: parseInt(document.getElementById('requestLuxury').value) || 0
+  };
+  
+  if (offer.economy === 0 && offer.food === 0 && offer.luxury === 0) {
+    alert('❌ You must offer something');
+    return;
+  }
+  
+  if (request.economy === 0 && request.food === 0 && request.luxury === 0) {
+    alert('❌ You must request something');
+    return;
+  }
+  
+  sendTradeOffer(targetId, offer, request);
+  
+  // Clear inputs
+  document.getElementById('offerEconomy').value = '';
+  document.getElementById('offerFood').value = '';
+  document.getElementById('offerLuxury').value = '';
+  document.getElementById('requestEconomy').value = '';
+  document.getElementById('requestFood').value = '';
+  document.getElementById('requestLuxury').value = '';
+  
+  hideTradeModal();
 }
 
 // Show/Hide Screens
@@ -337,9 +385,22 @@ function updateGameUI(game) {
   document.getElementById('actionTrade').disabled = !isStateActionsPhase;
   
   // Update action hint
-  const hintText = isStateActionsPhase ? 
+  let hintText = isStateActionsPhase ? 
     'Take your actions for this round' : 
     `Current phase: ${game.phase}`;
+  
+  // Add natural event info if present
+  if (game.lastNaturalEvent && game.lastNaturalEvent.round === game.round) {
+    const event = game.lastNaturalEvent;
+    const eventEmojis = {
+      drought: '🌵',
+      plague: '🦠',
+      earthquake: '🌋',
+      flood: '🌊'
+    };
+    hintText += ` | ${eventEmojis[event.event] || '⚠️'} ${event.event.toUpperCase()} affected ${event.targetName}`;
+  }
+  
   document.getElementById('actionHint').textContent = hintText;
   
   // Show/hide host controls
@@ -369,7 +430,26 @@ function updateGameUI(game) {
   // Check for victory
   if (game.gameOver) {
     showVictoryBanner(game);
+  } else if (game.victoryCountdown) {
+    showVictoryCountdown(game.victoryCountdown);
+  } else {
+    hideVictoryCountdown();
   }
+}
+
+// Show Victory Countdown
+function showVictoryCountdown(countdown) {
+  const banner = document.getElementById('victoryBanner');
+  const message = document.getElementById('victoryMessage');
+  
+  message.textContent = `🏁 ${countdown.winnerName} is the last standing! Must survive ${countdown.roundsRemaining} more round(s) to win!`;
+  banner.classList.remove('hidden');
+}
+
+// Hide Victory Countdown
+function hideVictoryCountdown() {
+  const banner = document.getElementById('victoryBanner');
+  banner.classList.add('hidden');
 }
 
 // Update War Modal
@@ -422,6 +502,35 @@ function updateTradeModal() {
   
   // Update target select
   const targetSelect = document.getElementById('tradeTargetSelect');
+}
+
+// Make trade functions available globally for onclick handlers
+window.acceptTrade = (tradeId) => {
+  acceptTradeOffer(tradeId);
+};
+
+window.rejectTrade = (tradeId) => {
+  rejectTradeOffer(tradeId);
+};
+
+// Helper function to format resources for display
+function formatResources(resources) {
+  const parts = [];
+  if (resources.food) parts.push(`${resources.food} Food`);
+  if (resources.luxury) parts.push(`${resources.luxury} Luxury`);
+  if (resources.economy) parts.push(`${resources.economy} Economy`);
+  return parts.join(', ') || 'Nothing';
+}
+
+// Update Trade Modal
+function updateTradeModal() {
+  if (!currentGame) return;
+  
+  const playerId = getCurrentPlayerId();
+  if (!playerId) return;
+  
+  // Update target select
+  const targetSelect = document.getElementById('tradeTargetSelect');
   targetSelect.innerHTML = '<option value="">Select player...</option>';
   
   Object.values(currentGame.players).forEach(p => {
@@ -433,9 +542,30 @@ function updateTradeModal() {
     }
   });
   
-  // Update received trades (simplified - full implementation would need more DB structure)
+  // Update received trades
   const tradesList = document.getElementById('receivedTradesList');
-  tradesList.innerHTML = '<p class="hint">No trade offers</p>';
+  tradesList.innerHTML = '';
+  
+  const pendingTrades = Object.values(currentGame.tradeOffers || {}).filter(
+    trade => trade.toId === playerId && trade.status === 'pending'
+  );
+  
+  if (pendingTrades.length === 0) {
+    tradesList.innerHTML = '<p class="hint">No trade offers</p>';
+  } else {
+    pendingTrades.forEach(trade => {
+      const tradeDiv = document.createElement('div');
+      tradeDiv.className = 'trade-offer';
+      tradeDiv.innerHTML = `
+        <p><strong>From ${trade.fromName}:</strong></p>
+        <p>Offers: ${formatResources(trade.offer)}</p>
+        <p>Requests: ${formatResources(trade.request)}</p>
+        <button class="btn btn-success" onclick="window.acceptTrade('${trade.id}')">Accept</button>
+        <button class="btn btn-danger" onclick="window.rejectTrade('${trade.id}')">Reject</button>
+      `;
+      tradesList.appendChild(tradeDiv);
+    });
+  }
 }
 
 // Update Rebellion Modal
