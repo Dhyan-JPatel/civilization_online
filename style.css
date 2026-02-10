@@ -606,3 +606,17 @@ button:disabled, .btn:disabled {
   margin-right: 10px;
   margin-top: 10px;
 }
+
+/* War Items */
+.war-item {
+  background: rgba(255, 100, 100, 0.1);
+  border: 1px solid rgba(255, 100, 100, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.war-item div {
+  margin-top: 5px;
+  color: #ffaaaa;
+}
