@@ -15,14 +15,15 @@ import {
   listenToGameState,
   stopListeningToGameState,
   leaveGame,
+  getCurrentGameCode,
+  getCurrentPlayerId,
+  getCurrentPlayerName,
+  getIsHost,
   CREATOR_KEY
 } from './game.js';
 
 // UI State
 let currentGame = null;
-let currentPlayerId = null;
-let currentPlayerName = null;
-let isHost = false;
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', async () => {
@@ -42,14 +43,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   if (savedGameCode && savedPlayerId && savedPlayerName) {
     console.log(`🔄 Attempting to reconnect to game ${savedGameCode}...`);
-    currentPlayerId = savedPlayerId;
-    currentPlayerName = savedPlayerName;
     
     // Listen to game state to verify game still exists
     listenToGameState(savedGameCode, (game) => {
       if (game && game.players && game.players[savedPlayerId]) {
         currentGame = game;
-        isHost = game.players[savedPlayerId].isHost;
         
         if (game.started) {
           showGameScreen();
@@ -122,10 +120,6 @@ async function handleCreateGame() {
   const result = await createGame(playerName, naturalEvents);
   
   if (result) {
-    currentPlayerId = result.playerId;
-    currentPlayerName = result.playerName;
-    isHost = true;
-    
     // Start listening to game state
     listenToGameState(result.gameCode, (game) => {
       currentGame = game;
@@ -161,10 +155,6 @@ async function handleJoinGame() {
   const result = await joinGame(gameCode, playerName);
   
   if (result) {
-    currentPlayerId = result.playerId;
-    currentPlayerName = result.playerName;
-    isHost = false;
-    
     // Start listening to game state
     listenToGameState(result.gameCode, (game) => {
       currentGame = game;
@@ -184,7 +174,7 @@ async function handleJoinGame() {
 
 // Handle Start Game
 async function handleStartGame() {
-  if (!isHost) return;
+  if (!getIsHost()) return;
   await startGame();
 }
 
@@ -293,16 +283,19 @@ function updateLobbyUI(game) {
   });
   
   // Show/hide host controls
-  if (isHost) {
+  if (getIsHost()) {
     document.getElementById('hostControls').classList.remove('hidden');
   }
 }
 
 // Update Game UI
 function updateGameUI(game) {
-  if (!game || !currentPlayerId) return;
+  if (!game) return;
   
-  const player = game.players[currentPlayerId];
+  const playerId = getCurrentPlayerId();
+  if (!playerId) return;
+  
+  const player = game.players[playerId];
   if (!player) return;
   
   // Update phase and round
@@ -350,7 +343,7 @@ function updateGameUI(game) {
   document.getElementById('actionHint').textContent = hintText;
   
   // Show/hide host controls
-  if (isHost) {
+  if (getIsHost()) {
     document.getElementById('gameHostControls').classList.remove('hidden');
   }
   
@@ -359,7 +352,7 @@ function updateGameUI(game) {
   otherPlayersList.innerHTML = '';
   
   Object.values(game.players).forEach(p => {
-    if (p.id === currentPlayerId) return;
+    if (p.id === playerId) return;
     
     const playerDiv = document.createElement('div');
     playerDiv.className = 'player-item';
@@ -381,16 +374,19 @@ function updateGameUI(game) {
 
 // Update War Modal
 function updateWarModal() {
-  if (!currentGame || !currentPlayerId) return;
+  if (!currentGame) return;
   
-  const player = currentGame.players[currentPlayerId];
+  const playerId = getCurrentPlayerId();
+  if (!playerId) return;
+  
+  const player = currentGame.players[playerId];
   
   // Update target select
   const targetSelect = document.getElementById('warTargetSelect');
   targetSelect.innerHTML = '<option value="">Select opponent...</option>';
   
   Object.values(currentGame.players).forEach(p => {
-    if (p.id !== currentPlayerId && !p.collapsed) {
+    if (p.id !== playerId && !p.collapsed) {
       const option = document.createElement('option');
       option.value = p.id;
       option.textContent = p.name;
@@ -419,14 +415,17 @@ function updateWarModal() {
 
 // Update Trade Modal
 function updateTradeModal() {
-  if (!currentGame || !currentPlayerId) return;
+  if (!currentGame) return;
+  
+  const playerId = getCurrentPlayerId();
+  if (!playerId) return;
   
   // Update target select
   const targetSelect = document.getElementById('tradeTargetSelect');
   targetSelect.innerHTML = '<option value="">Select player...</option>';
   
   Object.values(currentGame.players).forEach(p => {
-    if (p.id !== currentPlayerId && !p.collapsed) {
+    if (p.id !== playerId && !p.collapsed) {
       const option = document.createElement('option');
       option.value = p.id;
       option.textContent = p.name;
@@ -441,9 +440,12 @@ function updateTradeModal() {
 
 // Update Rebellion Modal
 function updateRebellionModal() {
-  if (!currentGame || !currentPlayerId) return;
+  if (!currentGame) return;
   
-  const player = currentGame.players[currentPlayerId];
+  const playerId = getCurrentPlayerId();
+  if (!playerId) return;
+  
+  const player = currentGame.players[playerId];
   
   if (player.rebellion) {
     document.getElementById('rebellionStatus').textContent = 'Active Rebellion!';

@@ -146,6 +146,12 @@ async function createGame(playerName, enableNaturalEvents = true) {
   try {
     await set(ref(db, `games/${gameCode}`), gameData);
     
+    // Set module-level state
+    currentGameCode = gameCode;
+    currentPlayerId = playerId;
+    currentPlayerName = playerName;
+    isHost = true;
+    
     // Store in localStorage for reconnection
     localStorage.setItem('currentGameCode', gameCode);
     localStorage.setItem('currentPlayerId', playerId);
@@ -225,16 +231,30 @@ async function joinGame(gameCode, playerName) {
     });
     
     const playerId = Object.keys(result.snapshot.val().players).find(
-      pid => result.snapshot.val().players[pid].name === playerName && !result.snapshot.val().players[pid].isHost
+      pid => result.snapshot.val().players[pid].name === playerName && 
+             result.snapshot.val().players[pid].lastSeen === result.snapshot.val().players[pid].lastSeen
     );
+    
+    // Find the player ID we just created (it's the newest one)
+    const players = result.snapshot.val().players;
+    const newPlayerId = Object.keys(players).find(pid => {
+      const p = players[pid];
+      return p.name === playerName && !p.isHost;
+    });
+    
+    // Set module-level state
+    currentGameCode = gameCode;
+    currentPlayerId = newPlayerId;
+    currentPlayerName = playerName;
+    isHost = false;
     
     // Store in localStorage for reconnection
     localStorage.setItem('currentGameCode', gameCode);
-    localStorage.setItem('currentPlayerId', playerId);
+    localStorage.setItem('currentPlayerId', newPlayerId);
     localStorage.setItem('currentPlayerName', playerName);
     
     console.log(`✅ Joined game: ${gameCode}`);
-    return { gameCode, playerId, playerName };
+    return { gameCode, playerId: newPlayerId, playerName };
   } catch (error) {
     console.error('❌ Failed to join game:', error);
     alert('Failed to join game: ' + error.message);
@@ -745,6 +765,9 @@ async function declareWar(targetPlayerId) {
 function listenToGameState(gameCode, callback) {
   if (!db) return;
 
+  // Set current game code
+  currentGameCode = gameCode;
+
   const gameRef = ref(db, `games/${gameCode}`);
   gameStateListener = onValue(gameRef, (snapshot) => {
     const game = snapshot.val();
@@ -784,7 +807,7 @@ async function leaveGame() {
   }
 }
 
-// Export functions
+// Export functions and getters
 export {
   initFirebase,
   createGame,
@@ -799,9 +822,22 @@ export {
   listenToGameState,
   stopListeningToGameState,
   leaveGame,
-  currentGameCode,
-  currentPlayerId,
-  currentPlayerName,
-  isHost,
   CREATOR_KEY
 };
+
+// Export getter functions for dynamic state
+export function getCurrentGameCode() {
+  return currentGameCode;
+}
+
+export function getCurrentPlayerId() {
+  return currentPlayerId;
+}
+
+export function getCurrentPlayerName() {
+  return currentPlayerName;
+}
+
+export function getIsHost() {
+  return isHost;
+}
