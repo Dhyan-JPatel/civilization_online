@@ -1,6 +1,17 @@
+# Firebase configuration with secrets
+firebaseconfig.txt
+
 # Development files with secrets
 index.dev.html
 test_config.html
+*.old.html
+*.old.js
+*.old.css
+*.old.*
+
+# Environment files
+.env
+.env.local
 
 # Node modules if added later
 node_modules/
