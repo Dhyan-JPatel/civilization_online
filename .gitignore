@@ -1,0 +1,9 @@
+firebaseconfig.txt
+*.old.html
+*.old.js
+*.old.css
+node_modules/
+.env
+.env.local
+dist/
+build/
