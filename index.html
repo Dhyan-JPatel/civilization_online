@@ -26,6 +26,12 @@
         <h2>Create New Game</h2>
         <input type="password" id="creatorKey" placeholder="Creator Key" class="input">
         <input type="text" id="createPlayerName" placeholder="Your Display Name" maxlength="20" class="input">
+        <div style="margin: 10px 0;">
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+            <input type="checkbox" id="naturalEventsToggle" checked style="width: 20px; height: 20px;">
+            <span>Enable Natural Events</span>
+          </label>
+        </div>
         <button id="createBtn" class="btn btn-success">Create Game</button>
       </div>
     </div>
@@ -59,6 +65,164 @@
 
       <div class="section">
         <button id="leaveGameBtn" class="btn btn-danger">Leave Game</button>
+      </div>
+    </div>
+
+    <!-- Game screen: Active gameplay -->
+    <div id="gameScreen" class="screen hidden">
+      <div class="header">
+        <h1>Civilization</h1>
+        <div class="game-info">
+          <span id="gamePhase" class="phase-badge">SETUP</span>
+          <span class="round-info">Round <span id="gameRound">1</span></span>
+        </div>
+      </div>
+
+      <!-- Victory Banner -->
+      <div id="victoryBanner" class="victory-banner hidden">
+        <h2>🏆 Victory! 🏆</h2>
+        <p id="victoryMessage"></p>
+      </div>
+
+      <!-- Player Dashboard -->
+      <div id="playerDashboard" class="dashboard">
+        <h2 id="playerDashboardName">Your Civilization</h2>
+        
+        <div class="stats-grid">
+          <div class="stat-item">
+            <span class="stat-label">Unrest</span>
+            <span id="statUnrest" class="stat-value danger">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Economy</span>
+            <span id="statEconomy" class="stat-value">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Military</span>
+            <span id="statMilitary" class="stat-value">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Food</span>
+            <span id="statFood" class="stat-value">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Luxury</span>
+            <span id="statLuxury" class="stat-value">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Morale</span>
+            <span id="statMorale" class="stat-value">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Population</span>
+            <span id="statPopulation" class="stat-value">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Farms</span>
+            <span id="statFarms" class="stat-value">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hand Display -->
+      <div class="section">
+        <h3>Your Hand (<span id="handCount">0</span>/10)</h3>
+        <div id="handDisplay" class="hand-display"></div>
+      </div>
+
+      <!-- Actions Panel -->
+      <div id="actionsPanel" class="section">
+        <h3>Actions</h3>
+        <div class="actions-grid">
+          <button id="actionBuyCard" class="action-btn">Buy Card (2 Economy)</button>
+          <button id="actionBuyFarm" class="action-btn">Buy Farm (5 Economy)</button>
+          <button id="actionBuyLuxury" class="action-btn">Buy Luxury (1 Economy)</button>
+          <button id="actionReduceUnrest" class="action-btn">Reduce Unrest</button>
+          <button id="actionWar" class="action-btn">War Actions</button>
+          <button id="actionTrade" class="action-btn">Trading</button>
+        </div>
+        <p id="actionHint" class="hint">Actions available in STATE_ACTIONS phase</p>
+      </div>
+
+      <!-- Host Controls -->
+      <div id="gameHostControls" class="section hidden">
+        <button id="btnAdvancePhase" class="btn btn-success">Advance Phase</button>
+      </div>
+
+      <!-- Other Players -->
+      <div class="section">
+        <h3>Other Players</h3>
+        <div id="otherPlayersList" class="players-list"></div>
+      </div>
+
+      <!-- Leave Game -->
+      <div class="section">
+        <button id="leaveGameBtn2" class="btn btn-danger">Leave Game</button>
+      </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="warModal" class="modal hidden">
+      <div class="modal-content">
+        <h2>War Actions</h2>
+        <div id="warModalBody">
+          <div class="section">
+            <h3>Declare War</h3>
+            <select id="warTargetSelect" class="input">
+              <option value="">Select opponent...</option>
+            </select>
+            <button id="btnDeclareWar" class="btn btn-primary">Declare War</button>
+          </div>
+          
+          <div class="section">
+            <h3>Current Wars</h3>
+            <div id="activeWarsList"></div>
+          </div>
+        </div>
+        <button id="closeWarModal" class="btn btn-danger">Close</button>
+      </div>
+    </div>
+
+    <div id="rebellionModal" class="modal hidden">
+      <div class="modal-content">
+        <h2>Rebellion Status</h2>
+        <div id="rebellionModalBody">
+          <p id="rebellionStatus" class="hint">No active rebellion</p>
+          <div id="rebellionDetails" class="hidden">
+            <p>Rebellion Track: <strong id="rebellionTrackValue">0</strong></p>
+            <p>Stage: <strong id="rebellionStage">-</strong></p>
+          </div>
+        </div>
+        <button id="closeRebellionModal" class="btn btn-danger">Close</button>
+      </div>
+    </div>
+
+    <div id="tradeModal" class="modal hidden">
+      <div class="modal-content">
+        <h2>Trading</h2>
+        <div id="tradeModalBody">
+          <div class="section">
+            <h3>Trade Offers Received</h3>
+            <div id="receivedTradesList"></div>
+          </div>
+          
+          <div class="section">
+            <h3>Send New Trade Offer</h3>
+            <select id="tradeTargetSelect" class="input">
+              <option value="">Select player...</option>
+            </select>
+            <p class="hint">Offer resources:</p>
+            <input type="number" id="offerEconomy" placeholder="Economy" class="input" min="0">
+            <input type="number" id="offerFood" placeholder="Food" class="input" min="0">
+            <input type="number" id="offerLuxury" placeholder="Luxury" class="input" min="0">
+            <p class="hint">Request resources:</p>
+            <input type="number" id="requestEconomy" placeholder="Economy" class="input" min="0">
+            <input type="number" id="requestFood" placeholder="Food" class="input" min="0">
+            <input type="number" id="requestLuxury" placeholder="Luxury" class="input" min="0">
+            <button id="btnSendTrade" class="btn btn-success">Send Trade Offer</button>
+          </div>
+        </div>
+        <button id="closeTradeModal" class="btn btn-danger">Close</button>
       </div>
     </div>
 
