@@ -26,14 +26,14 @@
     // IMPORTANT: Never commit real credentials!
     if (!window.__FIREBASE_CONFIG__) {
         window.__FIREBASE_CONFIG__ = {
-            apiKey: "YOUR_API_KEY_HERE",
-            authDomain: "your-project.firebaseapp.com",
-            databaseURL: "https://your-project-default-rtdb.firebaseio.com",
-            projectId: "your-project",
-            storageBucket: "your-project.appspot.com",
-            messagingSenderId: "YOUR_SENDER_ID",
-            appId: "YOUR_APP_ID"
-        };
+             apiKey: "AIzaSyB60cn2DLhu_VzhprtZ5x_SSzfcfjKzfVk",
+  authDomain: "civilization-game-efa6b.firebaseapp.com",
+  databaseURL: "https://civilization-game-efa6b-default-rtdb.firebaseio.com",
+  projectId: "civilization-game-efa6b",
+  storageBucket: "civilization-game-efa6b.firebasestorage.app",
+  messagingSenderId: "786254154239",
+  appId: "1:786254154239:web:9320036b347a64f9567fca"
+};
         
         // Log a warning if placeholder values are detected
         const hasPlaceholders = Object.values(window.__FIREBASE_CONFIG__).some(value => 
