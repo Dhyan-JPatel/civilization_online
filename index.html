@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multiplayer Game</title>
+<style>
+  body { font-family: Arial, sans-serif; background: #f0f0f0; padding: 20px; }
+  #game { max-width: 600px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px #aaa; }
+  button { margin: 5px; padding: 10px 15px; }
+  #players { margin-top: 15px; padding: 10px; background: #eee; border-radius: 5px; }
+  #status { margin-top: 15px; padding: 10px; background: #ddd; border-radius: 5px; }
+</style>
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+</head>
+<body>
+
+<div id="game">
+  <h1>Multiplayer Game</h1>
+  <div id="roundInfo">Round: 1</div>
+  <div id="scoreInfo">Your Score: 0</div>
+
+  <h3>Make your choice:</h3>
+  <button onclick="makeChoice('A')">Choice A</button>
+  <button onclick="makeChoice('B')">Choice B</button>
+
+  <div id="status"></div>
+
+  <h3>Players:</h3>
+  <div id="players"></div>
+</div>
+
+<script>
+  // =======================
+  // 1️⃣ Firebase Setup
+  // =======================
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+    databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT_ID.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  // =======================
+  // 2️⃣ Player Setup
+  // =======================
+  const playerId = 'player_' + Math.floor(Math.random() * 100000);
+  let round = 1;
+  let score = 0;
+
+  const roundInfo = document.getElementById('roundInfo');
+  const scoreInfo = document.getElementById('scoreInfo');
+  const status = document.getElementById('status');
+  const playersDiv = document.getElementById('players');
+
+  // Register player in database
+  db.ref('players/' + playerId).set({
+    score: 0,
+    choice: null
+  });
+
+  // Remove player when leaving
+  window.addEventListener('beforeunload', () => {
+    db.ref('players/' + playerId).remove();
+  });
+
+  // =======================
+  // 3️⃣ Choices
+  // =======================
+  function makeChoice(choice) {
+    db.ref('players/' + playerId + '/choice').set(choice);
+    status.innerHTML = `You chose: ${choice}`;
+  }
+
+  // =======================
+  // 4️⃣ Game Logic
+  // =======================
+  function calculateRound() {
+    db.ref('players').get().then(snapshot => {
+      if (!snapshot.exists()) return;
+
+      const players = snapshot.val();
+      for (const id in players) {
+        const playerChoice = players[id].choice;
+        let points = 0;
+
+        // Example rules
+        if (playerChoice === 'A') points = 5;
+        if (playerChoice === 'B') points = 3;
+
+        db.ref('players/' + id + '/score').set(players[id].score + points);
+        db.ref('players/' + id + '/choice').set(null); // Reset choice for next round
+      }
+
+      round++;
+      roundInfo.innerHTML = `Round: ${round}`;
+    });
+  }
+
+  // =======================
+  // 5️⃣ Display Players
+  // =======================
+  db.ref('players').on('value', snapshot => {
+    const players = snapshot.val();
+    playersDiv.innerHTML = '';
+    for (const id in players) {
+      const s = players[id].score;
+      playersDiv.innerHTML += `<div>${id}: ${s}</div>`;
+      if (id === playerId) scoreInfo.innerHTML = `Your Score: ${s}`;
+    }
+  });
+
+  // =======================
+  // 6️⃣ Start Auto Round Timer
+  // =======================
+  setInterval(calculateRound, 15000); // new round every 15 seconds
+</script>
+
+</body>
+</html>
