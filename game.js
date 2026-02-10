@@ -492,6 +492,17 @@ async function performWar() {
             const casualtyDie = Math.floor(Math.random() * 6) + 1;
             // Map die roll to number of cards to remove (out of 6)
             const cardsToRemove = Math.floor(target.hand.filter(c => c.type === 'military').length * casualtyDie / 6);
+            
+            // Store battle results for UI
+            war.lastBattle = {
+              winner: 'attacker',
+              attackerMilitary,
+              defenderMilitary,
+              casualtyRoll: casualtyDie,
+              cardsLost: cardsToRemove,
+              trackChange: trackIncrease
+            };
+            
             for (let i = 0; i < cardsToRemove; i++) {
               const militaryCardIndex = target.hand.findIndex(c => c.type === 'military');
               if (militaryCardIndex !== -1) {
@@ -507,6 +518,17 @@ async function performWar() {
             const casualtyDie = Math.floor(Math.random() * 6) + 1;
             // Map die roll to number of cards to remove (out of 6)
             const cardsToRemove = Math.floor(player.hand.filter(c => c.type === 'military').length * casualtyDie / 6);
+            
+            // Store battle results for UI
+            war.lastBattle = {
+              winner: 'defender',
+              attackerMilitary,
+              defenderMilitary,
+              casualtyRoll: casualtyDie,
+              cardsLost: cardsToRemove,
+              trackChange: trackIncrease
+            };
+            
             for (let i = 0; i < cardsToRemove; i++) {
               const militaryCardIndex = player.hand.findIndex(c => c.type === 'military');
               if (militaryCardIndex !== -1) {
@@ -517,6 +539,16 @@ async function performWar() {
           } else {
             // Tie - attacker wins ties
             trackIncrease = 1;
+            
+            // Store battle results for UI
+            war.lastBattle = {
+              winner: 'tie',
+              attackerMilitary,
+              defenderMilitary,
+              casualtyRoll: 0,
+              cardsLost: 0,
+              trackChange: trackIncrease
+            };
           }
           
           // Update war tracks
@@ -583,14 +615,31 @@ async function performRebellion() {
         
         // Roll dice
         let rebelTotal = 0;
+        const rebelRolls = [];
         for (let i = 0; i < rebelDice; i++) {
-          rebelTotal += Math.floor(Math.random() * 6) + 1;
+          const roll = Math.floor(Math.random() * 6) + 1;
+          rebelRolls.push(roll);
+          rebelTotal += roll;
         }
         
         let govTotal = 0;
+        const govRolls = [];
         for (let i = 0; i < govDice; i++) {
-          govTotal += Math.floor(Math.random() * 6) + 1;
+          const roll = Math.floor(Math.random() * 6) + 1;
+          govRolls.push(roll);
+          govTotal += roll;
         }
+        
+        // Store dice results for UI display
+        rebellion.lastDiceRoll = {
+          rebelDice,
+          govDice,
+          rebelRolls,
+          govRolls,
+          rebelTotal,
+          govTotal,
+          winner: rebelTotal > govTotal ? 'rebels' : 'government'
+        };
         
         // Determine outcome based on stage
         const stage = rebellion.stage || 1;
@@ -1002,9 +1051,50 @@ async function buyLuxury() {
     });
     
     console.log(`✅ Bought luxury (rolled ${diceRoll})`);
-    alert(`✅ Luxury purchased! Rolled: ${diceRoll}`);
+    // Store the dice roll result in player data for UI display
+    await runTransaction(playerRef, (player) => {
+      if (!player) return player;
+      player.lastLuxuryRoll = diceRoll;
+      return player;
+    });
   } catch (error) {
     console.error('❌ Failed to buy luxury:', error);
+    alert('❌ ' + error.message);
+  }
+}
+
+// Play Card Action
+async function playCard(cardIndex) {
+  if (!db || !currentGameCode || !currentPlayerId) return;
+
+  const playerRef = ref(db, `games/${currentGameCode}/players/${currentPlayerId}`);
+  
+  try {
+    await runTransaction(playerRef, (player) => {
+      if (!player) return player;
+      
+      if (cardIndex < 0 || cardIndex >= player.hand.length) {
+        throw new Error(`Card index ${cardIndex} is out of range (hand size: ${player.hand.length})`);
+      }
+      
+      const card = player.hand[cardIndex];
+      
+      // Initialize discard pile if it doesn't exist
+      if (!player.discardPile) {
+        player.discardPile = [];
+      }
+      
+      // Remove card from hand and add to discard pile
+      player.hand.splice(cardIndex, 1);
+      player.discardPile.push(card);
+      
+      return player;
+    });
+    
+    console.log(`✅ Played card`);
+    alert('✅ Card played and discarded!');
+  } catch (error) {
+    console.error('❌ Failed to play card:', error);
     alert('❌ ' + error.message);
   }
 }
@@ -1351,6 +1441,7 @@ export {
   startGame,
   advancePhase,
   buyCard,
+  playCard,
   buyFarm,
   buyLuxury,
   reduceUnrest,

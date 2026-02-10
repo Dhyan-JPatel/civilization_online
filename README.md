@@ -52,6 +52,8 @@ All game phases are now implemented with complete logic:
   - 52-card deck per player (Economy = red, Military = black)
   - Hand management with 10-card limit
   - Draw and discard mechanics
+  - **Interactive card playing** - Click cards to play/discard them
+  - Confirmation dialogs for card actions
   
 - **Stats & Resources**:
   - Unrest, Economy, Military, Food, Luxury, Morale, Population
@@ -62,6 +64,7 @@ All game phases are now implemented with complete logic:
   - War track progression (0-7) with automatic battle resolution
   - Military comparison determines winner
   - Casualty dice (1d6) removes military cards from loser
+  - **Visual battle results** - Animated modal shows military comparison, dice rolls, and outcomes
   - Siege at track 3+ (stops food production, +8 unrest)
   - Occupation at track 7 (civilization collapse)
   - Conqueror receives +5 unrest per occupied civilization
@@ -72,6 +75,7 @@ All game phases are now implemented with complete logic:
   - Dynamic dice pool calculation (base + modifiers)
   - Rebels: 2 base + population/siege/food/war bonuses
   - Government: 2 base + military/20 bonus dice
+  - **Visual dice battle display** - Animated modal shows dice pools, rolls, and winner
   - 3-stage progression (Civil Disorder → Armed Uprising → Regime Collapse)
   - Different track changes per stage
   - Crushed at track 0 (-20 unrest reward)
@@ -112,6 +116,15 @@ All game phases are now implemented with complete logic:
   - Real-time updates via Firebase
   - Auto-reconnection after page reload
   - Mobile-optimized UI with touch targets
+  
+- **Enhanced UI/UX**:
+  - **Interactive card system** - Click cards to play/discard with confirmation dialogs
+  - **Animated dice result modals** - Beautiful display of all dice rolls with:
+    - Rebellion battles showing rebel vs government dice pools
+    - War battles showing military comparison and casualties
+    - Luxury purchases showing dice roll results
+  - Smooth animations (slideIn, fadeIn) for modal transitions
+  - Clear visual feedback for all game actions
 
 ### Phase 1 (Complete)
 - **Create Games**: Host creates a game using a creator key and receives a unique 5-character game code

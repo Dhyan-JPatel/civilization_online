@@ -589,6 +589,35 @@ button:disabled, .btn:disabled {
   }
 }
 
+/* Dice Result Modal Enhancements */
+#diceResultModal .modal-content {
+  animation: slideIn 0.3s ease-out;
+}
+
+#diceResultContent {
+  animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(-50px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 /* Trade Offers */
 .trade-offer {
   background: rgba(255, 255, 255, 0.05);
