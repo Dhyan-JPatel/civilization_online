@@ -1,15 +1,15 @@
 # Deployment Instructions for Civilization Online
 
 ## Overview
-Civilization Online requires Firebase Realtime Database configuration to be injected at runtime. The application does NOT contain hardcoded Firebase credentials for security reasons.
+Civilization Online requires Firebase Realtime Database configuration to be injected at runtime via the `firebase-config-loader.js` file. The application does NOT contain hardcoded Firebase credentials for security reasons.
 
 ## Firebase Configuration
 
-The application expects `window.RUNTIME_FIREBASE_CONFIG` to be available before `main.js` loads.
+The application uses `firebase-config-loader.js` which sets `window.__FIREBASE_CONFIG__` before `main.js` loads. This file supports three configuration methods:
 
 ### Required Configuration Structure
 ```javascript
-window.RUNTIME_FIREBASE_CONFIG = {
+window.__FIREBASE_CONFIG__ = {
   apiKey: "YOUR_API_KEY",
   authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
   databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
@@ -20,47 +20,64 @@ window.RUNTIME_FIREBASE_CONFIG = {
 };
 ```
 
-## Deployment Methods
+## Configuration Methods
 
-### Method 1: Build-time Injection
-Add a script tag before loading the app in `index.html`:
-
-```html
-<script>
-  window.RUNTIME_FIREBASE_CONFIG = {
-    apiKey: process.env.FIREBASE_API_KEY,
-    authDomain: process.env.FIREBASE_AUTH_DOMAIN,
-    // ... etc
-  };
-</script>
-<script type="module" src="main.js"></script>
-```
-
-### Method 2: Server-side Injection
-If using a web server (Express, etc.), inject the configuration server-side:
+### Method 1: Direct Edit (Development Only)
+Edit `firebase-config-loader.js` directly and replace the placeholder values:
 
 ```javascript
-app.get('/', (req, res) => {
-  const html = fs.readFileSync('index.html', 'utf8');
-  const configScript = `<script>window.RUNTIME_FIREBASE_CONFIG=${JSON.stringify(firebaseConfig)};</script>`;
-  res.send(html.replace('</head>', `${configScript}</head>`));
-});
+window.__FIREBASE_CONFIG__ = {
+    apiKey: "your-actual-api-key",
+    authDomain: "your-project.firebaseapp.com",
+    databaseURL: "https://your-project-default-rtdb.firebaseio.com",
+    projectId: "your-project",
+    storageBucket: "your-project.appspot.com",
+    messagingSenderId: "your-sender-id",
+    appId: "your-app-id"
+};
 ```
 
-### Method 3: Environment Variables via Build Tool
-Use a build tool like Vite, Webpack, or Parcel to inject environment variables:
+**⚠️ WARNING: Only use this method for local development. Never commit real credentials!**
+
+### Method 2: Build-time Injection (Recommended)
+Use build tools to inject configuration during build:
 
 ```javascript
-// vite.config.js
+// In firebase-config-loader.js, uncomment and modify:
+if (typeof __FIREBASE_CONFIG_FROM_BUILD__ !== 'undefined') {
+    window.__FIREBASE_CONFIG__ = __FIREBASE_CONFIG_FROM_BUILD__;
+    return;
+}
+```
+
+Then use your build tool to define `__FIREBASE_CONFIG_FROM_BUILD__`:
+
+```javascript
+// vite.config.js example
 export default {
   define: {
-    'window.RUNTIME_FIREBASE_CONFIG': JSON.stringify({
+    '__FIREBASE_CONFIG_FROM_BUILD__': JSON.stringify({
       apiKey: process.env.VITE_FIREBASE_API_KEY,
-      // ... etc
+      // ... other config
     })
   }
 }
 ```
+
+### Method 3: Fetch from Secure Endpoint (Production Recommended)
+Edit `firebase-config-loader.js` to fetch configuration from your backend:
+
+```javascript
+// In firebase-config-loader.js, uncomment and modify:
+fetch('/api/firebase-config')
+    .then(response => response.json())
+    .then(config => {
+        window.__FIREBASE_CONFIG__ = config;
+    })
+    .catch(err => console.error('Failed to load Firebase config:', err));
+```
+
+Then implement `/api/firebase-config` endpoint on your server to return the configuration.
 
 ## Firebase Setup
 
@@ -86,7 +103,19 @@ export default {
 
 ## Local Development
 
-For local development, create `index.dev.html` (gitignored) with embedded config:
+For local development, the simplest approach is to edit `firebase-config-loader.js` directly:
+
+1. Open `firebase-config-loader.js`
+2. Replace the placeholder values in Option 3 with your actual Firebase configuration
+3. Save the file
+4. Open `index.html` in your browser (or use a local web server like `python -m http.server`)
+
+**Important**: 
+- Do NOT commit your real Firebase credentials to version control
+- The `.gitignore` file includes `firebaseconfig.txt` to prevent accidental commits
+- Consider using `index.dev.html` for development if you prefer keeping config separate
+
+Alternatively, create `index.dev.html` (gitignored) with inline config:
 
 ```html
 <!DOCTYPE html>
@@ -98,8 +127,14 @@ For local development, create `index.dev.html` (gitignored) with embedded config
   <link rel="stylesheet" href="style.css">
   
   <script>
-    window.RUNTIME_FIREBASE_CONFIG = {
-      // Your Firebase config here
+    window.__FIREBASE_CONFIG__ = {
+      apiKey: "your-dev-api-key",
+      authDomain: "your-project.firebaseapp.com",
+      databaseURL: "https://your-project-default-rtdb.firebaseio.com",
+      projectId: "your-project",
+      storageBucket: "your-project.appspot.com",
+      messagingSenderId: "your-sender-id",
+      appId: "your-app-id"
     };
   </script>
 </head>
