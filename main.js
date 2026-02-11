@@ -35,6 +35,13 @@ import {
   CREATOR_KEY
 } from './game.js';
 
+// Helper function to escape HTML to prevent XSS
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
 // UI State
 let currentGame = null;
 
@@ -593,7 +600,7 @@ function updateGameUI(game) {
       }
       
       playerDiv.innerHTML = `
-        <div class="player-name">${turnIndicator}${isCurrentPlayer ? '(You) ' : ''}${p.name}${p.collapsed ? ' ⚠️ COLLAPSED' : ''}</div>
+        <div class="player-name">${turnIndicator}${isCurrentPlayer ? '(You) ' : ''}${escapeHtml(p.name)}${p.collapsed ? ' ⚠️ COLLAPSED' : ''}</div>
         <div class="player-stats-mini">
           <span>📊 ${p.stats.economy}E ${p.stats.military}M</span>
           <span>🔥 ${p.stats.unrest}U</span>
@@ -615,7 +622,7 @@ function updateGameUI(game) {
       const playerDiv = document.createElement('div');
       playerDiv.className = 'player-item';
       playerDiv.innerHTML = `
-        <div class="player-name">${p.name}${p.collapsed ? ' ⚠️ COLLAPSED' : ''}</div>
+        <div class="player-name">${escapeHtml(p.name)}${p.collapsed ? ' ⚠️ COLLAPSED' : ''}</div>
         <div class="player-stats-mini">
           <span>📊 ${p.stats.economy}E ${p.stats.military}M</span>
           <span>🔥 ${p.stats.unrest}U</span>

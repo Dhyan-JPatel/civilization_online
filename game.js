@@ -683,6 +683,15 @@ function isPlayerTurn(game, playerId) {
   return true;
 }
 
+// Validate turn and throw error if not player's turn
+function validatePlayerTurn(game, playerId) {
+  if (!isPlayerTurn(game, playerId)) {
+    const currentTurnPlayerId = getCurrentTurnPlayer(game);
+    const currentTurnPlayerName = game.players[currentTurnPlayerId]?.name || 'Unknown';
+    throw new Error(`Not your turn. It's ${currentTurnPlayerName}'s turn.`);
+  }
+}
+
 // Get the current turn player ID
 function getCurrentTurnPlayer(game) {
   if (!game || !game.turnOrder || game.turnOrder.length === 0) {
@@ -1293,11 +1302,7 @@ async function buyCard() {
       }
       
       // Turn validation
-      if (!isPlayerTurn(game, currentPlayerId)) {
-        const currentTurnPlayerId = getCurrentTurnPlayer(game);
-        const currentTurnPlayerName = game.players[currentTurnPlayerId]?.name || 'Unknown';
-        throw new Error(`Not your turn. It's ${currentTurnPlayerName}'s turn.`);
-      }
+      validatePlayerTurn(game, currentPlayerId);
       
       const player = game.players[currentPlayerId];
       if (!player) return game;
@@ -1373,11 +1378,7 @@ async function buyFarm() {
       }
       
       // Turn validation
-      if (!isPlayerTurn(game, currentPlayerId)) {
-        const currentTurnPlayerId = getCurrentTurnPlayer(game);
-        const currentTurnPlayerName = game.players[currentTurnPlayerId]?.name || 'Unknown';
-        throw new Error(`Not your turn. It's ${currentTurnPlayerName}'s turn.`);
-      }
+      validatePlayerTurn(game, currentPlayerId);
       
       const player = game.players[currentPlayerId];
       if (!player) return game;
@@ -1434,11 +1435,7 @@ async function buyLuxury() {
       }
       
       // Turn validation
-      if (!isPlayerTurn(game, currentPlayerId)) {
-        const currentTurnPlayerId = getCurrentTurnPlayer(game);
-        const currentTurnPlayerName = game.players[currentTurnPlayerId]?.name || 'Unknown';
-        throw new Error(`Not your turn. It's ${currentTurnPlayerName}'s turn.`);
-      }
+      validatePlayerTurn(game, currentPlayerId);
       
       const player = game.players[currentPlayerId];
       if (!player) return game;
@@ -1548,11 +1545,7 @@ async function reduceUnrest() {
       }
       
       // Turn validation
-      if (!isPlayerTurn(game, currentPlayerId)) {
-        const currentTurnPlayerId = getCurrentTurnPlayer(game);
-        const currentTurnPlayerName = game.players[currentTurnPlayerId]?.name || 'Unknown';
-        throw new Error(`Not your turn. It's ${currentTurnPlayerName}'s turn.`);
-      }
+      validatePlayerTurn(game, currentPlayerId);
       
       const player = game.players[currentPlayerId];
       if (!player) return game;
@@ -1670,11 +1663,7 @@ async function declareWar(targetPlayerId) {
       }
       
       // Turn validation
-      if (!isPlayerTurn(game, currentPlayerId)) {
-        const currentTurnPlayerId = getCurrentTurnPlayer(game);
-        const currentTurnPlayerName = game.players[currentTurnPlayerId]?.name || 'Unknown';
-        throw new Error(`Not your turn. It's ${currentTurnPlayerName}'s turn.`);
-      }
+      validatePlayerTurn(game, currentPlayerId);
       
       const player = game.players[currentPlayerId];
       const target = game.players[targetPlayerId];
@@ -1854,11 +1843,7 @@ async function playEmergencyCard() {
       }
       
       // Turn validation
-      if (!isPlayerTurn(game, currentPlayerId)) {
-        const currentTurnPlayerId = getCurrentTurnPlayer(game);
-        const currentTurnPlayerName = game.players[currentTurnPlayerId]?.name || 'Unknown';
-        throw new Error(`Not your turn. It's ${currentTurnPlayerName}'s turn.`);
-      }
+      validatePlayerTurn(game, currentPlayerId);
       
       const player = game.players[currentPlayerId];
       if (!player) return game;
@@ -1907,11 +1892,7 @@ async function sendTradeOffer(targetPlayerId, offer, request) {
       }
       
       // Turn validation
-      if (!isPlayerTurn(game, currentPlayerId)) {
-        const currentTurnPlayerId = getCurrentTurnPlayer(game);
-        const currentTurnPlayerName = game.players[currentTurnPlayerId]?.name || 'Unknown';
-        throw new Error(`Not your turn. It's ${currentTurnPlayerName}'s turn.`);
-      }
+      validatePlayerTurn(game, currentPlayerId);
       
       const player = game.players[currentPlayerId];
       const target = game.players[targetPlayerId];
