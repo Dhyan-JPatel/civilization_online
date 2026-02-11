@@ -418,7 +418,12 @@ function updateGameUI(game) {
   document.getElementById('actionBuyFarm').disabled = !isStateActionsPhase || !canTakeMoreActions || player.actions.boughtFarm;
   document.getElementById('actionBuyLuxury').disabled = !isStateActionsPhase || !canTakeMoreActions || player.actions.boughtLuxury;
   document.getElementById('actionReduceUnrest').disabled = !isStateActionsPhase || !canTakeMoreActions || player.actions.reducedUnrest;
-  document.getElementById('actionEmergencyCard').disabled = !isStateActionsPhase || !canTakeMoreActions || player.emergencyCardUsedThisRound || (player.emergencyCards || 0) <= 0;
+  
+  // Emergency card button: requires card available and not used this round
+  const hasEmergencyCards = (player.emergencyCards || 0) > 0;
+  const alreadyUsedEmergencyCard = player.emergencyCardUsedThisRound;
+  document.getElementById('actionEmergencyCard').disabled = !isStateActionsPhase || !canTakeMoreActions || alreadyUsedEmergencyCard || !hasEmergencyCards;
+  
   document.getElementById('actionWar').disabled = !isStateActionsPhase || !canTakeMoreActions;
   document.getElementById('actionTrade').disabled = !isStateActionsPhase || !canTakeMoreActions;
   

@@ -310,6 +310,7 @@ function calculatePopulation(luxury, food, morale, military) {
 // Calculate Maximum Allowed Actions (based on unrest level)
 function getMaxActions(unrest) {
   // Rulebook: "You may take up to 2 State Actions, minus penalties"
+  // Currently only one penalty is implemented:
   // "30+ Unrest – Lose 1 State Action"
   if (unrest >= 30) {
     return 1; // Lost 1 action due to high unrest
