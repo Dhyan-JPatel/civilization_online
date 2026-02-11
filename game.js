@@ -307,25 +307,6 @@ function calculatePopulation(luxury, food, morale, military) {
   return Math.floor((luxury * Math.sqrt(food)) / moraleDivisor) + military;
 }
 
-// Calculate Maximum Allowed Actions (based on unrest level)
-function getMaxActions(unrest) {
-  // Rulebook: "You may take up to 2 State Actions, minus penalties"
-  // Currently only one penalty is implemented:
-  // "30+ Unrest – Lose 1 State Action"
-  if (unrest >= 30) {
-    return 1; // Lost 1 action due to high unrest
-  }
-  return 2; // Normal max actions
-}
-
-// Validate Action Limit (helper for action functions)
-function validateActionLimit(player) {
-  const maxActions = getMaxActions(player.stats.unrest);
-  if (player.actions.actionsUsed >= maxActions) {
-    throw new Error(`Cannot perform more actions this round (max ${maxActions} due to unrest)`);
-  }
-}
-
 // Perform Upkeep Phase
 async function performUpkeep() {
   if (!db || !currentGameCode) return;
