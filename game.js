@@ -1917,6 +1917,54 @@ async function rejectTradeOffer(tradeId) {
   }
 }
 
+// Break Trade Deal
+async function breakTrade(tradeId) {
+  if (!db || !currentGameCode || !currentPlayerId) return;
+
+  const gameRef = ref(db, `games/${currentGameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (game) => {
+      if (!game || !game.tradeOffers || !game.tradeOffers[tradeId]) {
+        throw new Error('Trade offer not found');
+      }
+      
+      const trade = game.tradeOffers[tradeId];
+      
+      // Can only break accepted trades
+      if (trade.status !== 'accepted') {
+        throw new Error('Can only break accepted trades');
+      }
+      
+      // Only participants can break the trade
+      if (trade.fromId !== currentPlayerId && trade.toId !== currentPlayerId) {
+        throw new Error('You are not a participant in this trade');
+      }
+      
+      const breaker = game.players[currentPlayerId];
+      if (!breaker) {
+        throw new Error('Player not found');
+      }
+      
+      // Apply +10 unrest penalty to breaker
+      breaker.stats.unrest += 10;
+      
+      // Mark trade as broken
+      trade.status = 'broken';
+      trade.brokenBy = currentPlayerId;
+      trade.brokenAt = Date.now();
+      
+      return game;
+    });
+    
+    console.log('✅ Trade broken (+10 unrest penalty applied)');
+    alert('⚠️ Trade broken! You received +10 unrest as penalty.');
+  } catch (error) {
+    console.error('❌ Failed to break trade:', error);
+    alert('❌ ' + error.message);
+  }
+}
+
 // Foreign Interference
 async function foreignInterference(targetPlayerId) {
   if (!db || !currentGameCode || !currentPlayerId) return;
@@ -2034,7 +2082,10 @@ export {
   sendTradeOffer,
   acceptTradeOffer,
   rejectTradeOffer,
+  breakTrade,  // Break accepted trade with penalty
   foreignInterference,
+  assignMilitary,  // Assign military cards to war roles
+  handleEconomicCollapse,  // Economic collapse recovery choice
   listenToGameState,
   stopListeningToGameState,
   leaveGame,

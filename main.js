@@ -17,7 +17,10 @@ import {
   sendTradeOffer,
   acceptTradeOffer,
   rejectTradeOffer,
+  breakTrade,  // Break accepted trade with penalty
   foreignInterference,
+  assignMilitary,  // Assign military cards to war roles
+  handleEconomicCollapse,  // Economic collapse recovery choice
   listenToGameState,
   stopListeningToGameState,
   leaveGame,
@@ -99,6 +102,7 @@ function setupEventListeners() {
   document.getElementById('actionEmergencyCard').addEventListener('click', () => playEmergencyCard());
   document.getElementById('actionWar').addEventListener('click', showWarModal);
   document.getElementById('actionTrade').addEventListener('click', showTradeModal);
+  document.getElementById('actionEconomicCollapse').addEventListener('click', showEconomicCollapseModal);
   document.getElementById('btnAdvancePhase').addEventListener('click', () => advancePhase());
   document.getElementById('leaveGameBtn2').addEventListener('click', handleLeaveGame);
   
@@ -107,8 +111,11 @@ function setupEventListeners() {
   document.getElementById('closeTradeModal').addEventListener('click', hideTradeModal);
   document.getElementById('closeRebellionModal').addEventListener('click', hideRebellionModal);
   document.getElementById('closeDiceResultModal').addEventListener('click', hideDiceResultModal);
+  document.getElementById('closeEconomicCollapseModal').addEventListener('click', hideEconomicCollapseModal);
   document.getElementById('btnDeclareWar').addEventListener('click', handleDeclareWar);
   document.getElementById('btnSendTrade').addEventListener('click', handleSendTrade);
+  document.getElementById('btnCollapseDrawCard').addEventListener('click', () => handleCollapseChoice(true));
+  document.getElementById('btnCollapseTakeUnrest').addEventListener('click', () => handleCollapseChoice(false));
 }
 
 // Handle Create Game
@@ -323,6 +330,19 @@ function hideDiceResultModal() {
   document.getElementById('diceResultModal').classList.add('hidden');
 }
 
+function showEconomicCollapseModal() {
+  document.getElementById('economicCollapseModal').classList.remove('hidden');
+}
+
+function hideEconomicCollapseModal() {
+  document.getElementById('economicCollapseModal').classList.add('hidden');
+}
+
+async function handleCollapseChoice(drawCard) {
+  hideEconomicCollapseModal();
+  await handleEconomicCollapse(drawCard);
+}
+
 // Update Lobby UI
 function updateLobbyUI(game) {
   if (!game) return;
@@ -421,6 +441,17 @@ function updateGameUI(game) {
   document.getElementById('actionEmergencyCard').disabled = !isStateActionsPhase || !canTakeMoreActions || player.emergencyCardUsedThisRound || (player.emergencyCards || 0) <= 0;
   document.getElementById('actionWar').disabled = !isStateActionsPhase || !canTakeMoreActions;
   document.getElementById('actionTrade').disabled = !isStateActionsPhase || !canTakeMoreActions;
+  
+  // Show economic collapse button only if player has 0 economy cards during STATE_ACTIONS
+  const economyCards = player.hand.filter(c => c.type === 'economy');
+  const hasEconomicCollapse = economyCards.length === 0;
+  const collapseBtn = document.getElementById('actionEconomicCollapse');
+  if (hasEconomicCollapse && isStateActionsPhase) {
+    collapseBtn.style.display = 'block';
+    collapseBtn.disabled = false;
+  } else {
+    collapseBtn.style.display = 'none';
+  }
   
   // Update action hint
   let hintText = '';
