@@ -375,11 +375,12 @@ async function performInternalPressure() {
         const player = game.players[playerId];
         if (player.collapsed) continue;
         
-        // Food stress
-        if (player.stats.food < 0) {
-          player.stats.unrest += 10;
-        } else if (player.stats.food < player.stats.population) {
-          player.stats.unrest += 5;
+        // Food stress - if-else ensures only one penalty applies
+        // Most severe shortage (< pop × 2) gets highest penalty
+        if (player.stats.food < player.stats.population * 2) {
+          player.stats.unrest += 10; // Severe food shortage
+        } else if (player.stats.food < player.stats.population * 4) {
+          player.stats.unrest += 5; // Moderate food shortage
         }
         
         // Siege pressure
@@ -388,11 +389,10 @@ async function performInternalPressure() {
           player.stats.unrest += 8;
         }
         
-        // Economic collapse check
-        if (player.stats.economy < 0) {
+        // Economic Collapse Pressure - add +10 unrest if no economy cards
+        const economyCards = player.hand.filter(card => card.type === 'economy');
+        if (economyCards.length === 0) {
           player.stats.unrest += 10;
-          player.collapsed = true;
-          player.collapseReason = 'Economic collapse';
         }
         
         // Trigger rebellion if unrest >= 100
@@ -434,6 +434,7 @@ async function resetActions() {
         traded: false
       };
       updates[`${playerId}/interferenceThisRound`] = {};
+      updates[`${playerId}/lastLuxuryRoll`] = null; // Clear stale dice result
     }
     
     await update(gameRef, updates);
@@ -939,11 +940,19 @@ async function checkVictory() {
 async function buyCard() {
   if (!db || !currentGameCode || !currentPlayerId) return;
 
-  const playerRef = ref(db, `games/${currentGameCode}/players/${currentPlayerId}`);
+  const gameRef = ref(db, `games/${currentGameCode}`);
   
   try {
-    await runTransaction(playerRef, (player) => {
-      if (!player) return player;
+    await runTransaction(gameRef, (game) => {
+      if (!game) return game;
+      
+      // Phase validation
+      if (game.phase !== 'STATE_ACTIONS') {
+        throw new Error('Can only buy cards during STATE_ACTIONS phase');
+      }
+      
+      const player = game.players[currentPlayerId];
+      if (!player) return game;
       
       if (player.actions.boughtCard) {
         throw new Error('Already bought a card this round');
@@ -977,7 +986,7 @@ async function buyCard() {
       
       // Economy will be recalculated automatically
       
-      return player;
+      return game;
     });
     
     console.log('✅ Bought card');
@@ -992,11 +1001,19 @@ async function buyCard() {
 async function buyFarm() {
   if (!db || !currentGameCode || !currentPlayerId) return;
 
-  const playerRef = ref(db, `games/${currentGameCode}/players/${currentPlayerId}`);
+  const gameRef = ref(db, `games/${currentGameCode}`);
   
   try {
-    await runTransaction(playerRef, (player) => {
-      if (!player) return player;
+    await runTransaction(gameRef, (game) => {
+      if (!game) return game;
+      
+      // Phase validation
+      if (game.phase !== 'STATE_ACTIONS') {
+        throw new Error('Can only buy farms during STATE_ACTIONS phase');
+      }
+      
+      const player = game.players[currentPlayerId];
+      if (!player) return game;
       
       if (player.actions.boughtFarm) {
         throw new Error('Already bought a farm this round');
@@ -1009,7 +1026,7 @@ async function buyFarm() {
       player.stats.farms += 1;
       player.actions.boughtFarm = true;
       
-      return player;
+      return game;
     });
     
     console.log('✅ Bought farm');
@@ -1024,13 +1041,21 @@ async function buyFarm() {
 async function buyLuxury() {
   if (!db || !currentGameCode || !currentPlayerId) return;
 
-  const playerRef = ref(db, `games/${currentGameCode}/players/${currentPlayerId}`);
+  const gameRef = ref(db, `games/${currentGameCode}`);
   
   try {
     const diceRoll = Math.floor(Math.random() * 6) + 1;
     
-    await runTransaction(playerRef, (player) => {
-      if (!player) return player;
+    await runTransaction(gameRef, (game) => {
+      if (!game) return game;
+      
+      // Phase validation
+      if (game.phase !== 'STATE_ACTIONS') {
+        throw new Error('Can only buy luxury during STATE_ACTIONS phase');
+      }
+      
+      const player = game.players[currentPlayerId];
+      if (!player) return game;
       
       if (player.actions.boughtLuxury) {
         throw new Error('Already bought luxury this round');
@@ -1045,18 +1070,13 @@ async function buyLuxury() {
       }
       
       player.stats.luxury += diceRoll;
+      player.lastLuxuryRoll = diceRoll;
       player.actions.boughtLuxury = true;
       
-      return player;
+      return game;
     });
     
     console.log(`✅ Bought luxury (rolled ${diceRoll})`);
-    // Store the dice roll result in player data for UI display
-    await runTransaction(playerRef, (player) => {
-      if (!player) return player;
-      player.lastLuxuryRoll = diceRoll;
-      return player;
-    });
   } catch (error) {
     console.error('❌ Failed to buy luxury:', error);
     alert('❌ ' + error.message);
@@ -1067,11 +1087,19 @@ async function buyLuxury() {
 async function playCard(cardIndex) {
   if (!db || !currentGameCode || !currentPlayerId) return;
 
-  const playerRef = ref(db, `games/${currentGameCode}/players/${currentPlayerId}`);
+  const gameRef = ref(db, `games/${currentGameCode}`);
   
   try {
-    await runTransaction(playerRef, (player) => {
-      if (!player) return player;
+    await runTransaction(gameRef, (game) => {
+      if (!game) return game;
+      
+      // Phase validation - cards can only be discarded during CLEANUP phase
+      if (game.phase !== 'CLEANUP') {
+        throw new Error('Can only discard cards during CLEANUP phase');
+      }
+      
+      const player = game.players[currentPlayerId];
+      if (!player) return game;
       
       if (cardIndex < 0 || cardIndex >= player.hand.length) {
         throw new Error(`Card index ${cardIndex} is out of range (hand size: ${player.hand.length})`);
@@ -1088,7 +1116,7 @@ async function playCard(cardIndex) {
       player.hand.splice(cardIndex, 1);
       player.discardPile.push(card);
       
-      return player;
+      return game;
     });
     
     console.log(`✅ Played card`);
@@ -1103,11 +1131,19 @@ async function playCard(cardIndex) {
 async function reduceUnrest() {
   if (!db || !currentGameCode || !currentPlayerId) return;
 
-  const playerRef = ref(db, `games/${currentGameCode}/players/${currentPlayerId}`);
+  const gameRef = ref(db, `games/${currentGameCode}`);
   
   try {
-    await runTransaction(playerRef, (player) => {
-      if (!player) return player;
+    await runTransaction(gameRef, (game) => {
+      if (!game) return game;
+      
+      // Phase validation
+      if (game.phase !== 'STATE_ACTIONS') {
+        throw new Error('Can only reduce unrest during STATE_ACTIONS phase');
+      }
+      
+      const player = game.players[currentPlayerId];
+      if (!player) return game;
       
       if (player.actions.reducedUnrest) {
         throw new Error('Already reduced unrest this round');
@@ -1116,7 +1152,7 @@ async function reduceUnrest() {
       player.stats.unrest = Math.max(0, player.stats.unrest - 10);
       player.actions.reducedUnrest = true;
       
-      return player;
+      return game;
     });
     
     console.log('✅ Reduced unrest');
@@ -1136,6 +1172,11 @@ async function declareWar(targetPlayerId) {
   try {
     await runTransaction(gameRef, (game) => {
       if (!game) return game;
+      
+      // Phase validation
+      if (game.phase !== 'STATE_ACTIONS') {
+        throw new Error('Can only declare war during STATE_ACTIONS phase');
+      }
       
       const player = game.players[currentPlayerId];
       const target = game.players[targetPlayerId];
@@ -1186,6 +1227,11 @@ async function sendTradeOffer(targetPlayerId, offer, request) {
   try {
     await runTransaction(gameRef, (game) => {
       if (!game) return game;
+      
+      // Phase validation
+      if (game.phase !== 'STATE_ACTIONS') {
+        throw new Error('Can only send trade offers during STATE_ACTIONS phase');
+      }
       
       const player = game.players[currentPlayerId];
       const target = game.players[targetPlayerId];
@@ -1347,6 +1393,11 @@ async function foreignInterference(targetPlayerId) {
   try {
     await runTransaction(gameRef, (game) => {
       if (!game) return game;
+      
+      // Phase validation
+      if (game.phase !== 'INTERNAL_PRESSURE') {
+        throw new Error('Foreign interference can only be performed during INTERNAL_PRESSURE phase');
+      }
       
       const player = game.players[currentPlayerId];
       const target = game.players[targetPlayerId];

@@ -381,17 +381,26 @@ function updateGameUI(game) {
   handDisplay.innerHTML = '';
   document.getElementById('handCount').textContent = player.hand.length;
   
+  const isCleanupPhase = game.phase === 'CLEANUP';
+  
   player.hand.forEach((card, index) => {
     const cardDiv = document.createElement('div');
     cardDiv.className = `card card-${card.type}`;
     cardDiv.textContent = `${card.value}${card.suit}`;
-    cardDiv.style.cursor = 'pointer';
-    cardDiv.title = 'Click to play/discard this card';
-    cardDiv.addEventListener('click', () => {
-      if (confirm(`Play/discard ${card.value}${card.suit}?`)) {
-        playCard(index);
-      }
-    });
+    
+    if (isCleanupPhase) {
+      cardDiv.style.cursor = 'pointer';
+      cardDiv.title = 'Click to discard this card';
+      cardDiv.addEventListener('click', () => {
+        if (confirm(`Discard ${card.value}${card.suit}?`)) {
+          playCard(index);
+        }
+      });
+    } else {
+      cardDiv.style.cursor = 'default';
+      cardDiv.title = 'Cards can only be discarded during CLEANUP phase';
+    }
+    
     handDisplay.appendChild(cardDiv);
   });
   
@@ -405,9 +414,33 @@ function updateGameUI(game) {
   document.getElementById('actionTrade').disabled = !isStateActionsPhase;
   
   // Update action hint
-  let hintText = isStateActionsPhase ? 
-    'Take your actions for this round' : 
-    `Current phase: ${game.phase}`;
+  let hintText = '';
+  
+  switch(game.phase) {
+    case 'UPKEEP':
+      hintText = '⏳ UPKEEP: Food production, morale and population calculated automatically';
+      break;
+    case 'INTERNAL_PRESSURE':
+      hintText = '⚠️ INTERNAL_PRESSURE: Unrest increases are being applied';
+      break;
+    case 'STATE_ACTIONS':
+      hintText = '🎯 STATE_ACTIONS: Take your actions for this round!';
+      break;
+    case 'WAR':
+      hintText = '⚔️ WAR: Battles are being resolved automatically';
+      break;
+    case 'REBELLION':
+      hintText = '🔥 REBELLION: Rebellions are being resolved automatically';
+      break;
+    case 'NATURAL_EVENTS':
+      hintText = '🌍 NATURAL_EVENTS: Random events may occur';
+      break;
+    case 'CLEANUP':
+      hintText = '🧹 CLEANUP: Discard cards if over hand limit (10 cards)';
+      break;
+    default:
+      hintText = `Current phase: ${game.phase}`;
+  }
   
   // Add natural event info if present
   if (game.lastNaturalEvent && game.lastNaturalEvent.round === game.round) {
