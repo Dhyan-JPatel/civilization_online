@@ -307,21 +307,30 @@ function calculatePopulation(luxury, food, morale, military) {
   return Math.floor((luxury * Math.sqrt(food)) / moraleDivisor) + military;
 }
 
-// Calculate Maximum Allowed Actions (based on unrest level)
-function getMaxActions(unrest) {
+// Calculate Maximum Allowed Actions (based on unrest level and rebellion stage)
+function getMaxActions(player) {
   // Rulebook: "You may take up to 2 State Actions, minus penalties"
   // "30+ Unrest – Lose 1 State Action"
-  if (unrest >= 30) {
-    return 1; // Lost 1 action due to high unrest
+  // "Stage 1 Rebellion: Lose 1 State Action"
+  let maxActions = 2;
+  
+  if (player.stats.unrest >= 30) {
+    maxActions = 1; // Lost 1 action due to high unrest
   }
-  return 2; // Normal max actions
+  
+  // Rebellion Stage 1: Lose 1 State Action (per manual line 167)
+  if (player.rebellion && player.rebellion.stage === 1) {
+    maxActions = Math.max(0, maxActions - 1);
+  }
+  
+  return maxActions;
 }
 
 // Validate Action Limit (helper for action functions)
 function validateActionLimit(player) {
-  const maxActions = getMaxActions(player.stats.unrest);
+  const maxActions = getMaxActions(player);
   if (player.actions.actionsUsed >= maxActions) {
-    throw new Error(`Cannot perform more actions this round (max ${maxActions} due to unrest)`);
+    throw new Error(`Cannot perform more actions this round (max ${maxActions} due to unrest/rebellion)`);
   }
 }
 
@@ -400,11 +409,12 @@ async function performInternalPressure() {
         if (player.collapsed) continue;
         
         // Food stress - if-else ensures only one penalty applies
-        // Most severe shortage (< pop × 2) gets highest penalty
-        if (player.stats.food < player.stats.population * 2) {
-          player.stats.unrest += 10; // Severe food shortage
-        } else if (player.stats.food < player.stats.population * 4) {
-          player.stats.unrest += 5; // Moderate food shortage
+        // Per manual: "If Food < Population × 4 → +10 Unrest instead" (more severe)
+        // "If Food < Population × 2 → +5 Unrest"
+        if (player.stats.food < player.stats.population * 4) {
+          player.stats.unrest += 10; // Severe food shortage (< pop × 4)
+        } else if (player.stats.food < player.stats.population * 2) {
+          player.stats.unrest += 5; // Moderate food shortage (< pop × 2)
         }
         
         // Siege pressure
@@ -761,7 +771,8 @@ async function performNaturalEvents() {
           target.droughtNextRound = true;
           break;
         case 'plague':
-          // Reduce morale by 5
+          // Reduce morale by 5 (per manual: "Plague → reduce morale by 5")
+          // Since morale = luxury + floor(food/2), reducing luxury reduces morale 1:1
           target.stats.luxury = Math.max(0, target.stats.luxury - 5);
           break;
         case 'earthquake':
@@ -985,6 +996,11 @@ async function buyCard() {
       // Check action limit based on unrest
       validateActionLimit(player);
       
+      // Rebellion Stage 2: No buying (per manual line 171)
+      if (player.rebellion && player.rebellion.stage >= 2) {
+        throw new Error('Cannot buy during rebellion stage 2 or 3 (Armed Uprising/Regime Collapse)');
+      }
+      
       if (player.actions.boughtCard) {
         throw new Error('Already bought a card this round');
       }
@@ -1050,6 +1066,11 @@ async function buyFarm() {
       // Check action limit based on unrest
       validateActionLimit(player);
       
+      // Rebellion Stage 2: No buying (per manual line 171)
+      if (player.rebellion && player.rebellion.stage >= 2) {
+        throw new Error('Cannot buy during rebellion stage 2 or 3 (Armed Uprising/Regime Collapse)');
+      }
+      
       if (player.actions.boughtFarm) {
         throw new Error('Already bought a farm this round');
       }
@@ -1095,6 +1116,11 @@ async function buyLuxury() {
       
       // Check action limit based on unrest
       validateActionLimit(player);
+      
+      // Rebellion Stage 2: No buying (per manual line 171)
+      if (player.rebellion && player.rebellion.stage >= 2) {
+        throw new Error('Cannot buy during rebellion stage 2 or 3 (Armed Uprising/Regime Collapse)');
+      }
       
       if (player.actions.boughtLuxury) {
         throw new Error('Already bought luxury this round');
@@ -1203,6 +1229,78 @@ async function reduceUnrest() {
     alert('✅ Unrest reduced by 10!');
   } catch (error) {
     console.error('❌ Failed to reduce unrest:', error);
+    alert('❌ ' + error.message);
+  }
+}
+
+// Handle Economic Collapse Recovery (per manual lines 106-111)
+async function handleEconomicCollapse(drawCard = true) {
+  if (!db || !currentGameCode || !currentPlayerId) return;
+
+  const gameRef = ref(db, `games/${currentGameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (game) => {
+      if (!game) return game;
+      
+      // Phase validation
+      if (game.phase !== 'STATE_ACTIONS') {
+        throw new Error('Can only handle economic collapse during STATE_ACTIONS phase');
+      }
+      
+      const player = game.players[currentPlayerId];
+      if (!player) return game;
+      
+      // Check if player has 0 economy cards
+      const economyCards = player.hand.filter(card => card.type === 'economy');
+      if (economyCards.length > 0) {
+        throw new Error('You have economy cards. This action is only for economic collapse (0 economy cards).');
+      }
+      
+      if (drawCard) {
+        // Option 1: Draw emergency card
+        // If red card drawn: nothing happens
+        // If black card drawn: +30 unrest
+        if (player.deck.length === 0) {
+          // Reshuffle discard pile into deck
+          player.deck = player.discardPile;
+          player.discardPile = [];
+          // Shuffle deck
+          for (let i = player.deck.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [player.deck[i], player.deck[j]] = [player.deck[j], player.deck[i]];
+          }
+        }
+        
+        if (player.deck.length > 0) {
+          const drawnCard = player.deck.shift();
+          
+          if (drawnCard.type === 'military') {
+            // Black card: +30 unrest
+            player.stats.unrest += 30;
+            alert(`❌ Drew black card ${drawnCard.suit}${drawnCard.value}! +30 unrest!`);
+          } else {
+            // Red card: nothing happens
+            alert(`✅ Drew red card ${drawnCard.suit}${drawnCard.value}! No penalty.`);
+          }
+          
+          // Put card back in deck (emergency draw, not added to hand)
+          player.deck.unshift(drawnCard);
+        } else {
+          throw new Error('No cards available in deck to draw');
+        }
+      } else {
+        // Option 2: Accept +20 unrest
+        player.stats.unrest += 20;
+        alert('⚠️ Accepted +20 unrest to stabilize economy');
+      }
+      
+      return game;
+    });
+    
+    console.log('✅ Handled economic collapse');
+  } catch (error) {
+    console.error('❌ Failed to handle economic collapse:', error);
     alert('❌ ' + error.message);
   }
 }
@@ -1336,6 +1434,11 @@ async function sendTradeOffer(targetPlayerId, offer, request) {
       
       // Check action limit based on unrest
       validateActionLimit(player);
+      
+      // Rebellion Stage 2: No trading (per manual line 171)
+      if (player.rebellion && player.rebellion.stage >= 2) {
+        throw new Error('Cannot trade during rebellion stage 2 or 3 (Armed Uprising/Regime Collapse)');
+      }
       
       if (player.actions.traded) {
         throw new Error('Already made a trade offer this round');
