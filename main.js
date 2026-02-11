@@ -17,7 +17,10 @@ import {
   sendTradeOffer,
   acceptTradeOffer,
   rejectTradeOffer,
+  breakTrade,  // Break accepted trade with penalty
   foreignInterference,
+  assignMilitary,  // Assign military cards to war roles
+  handleEconomicCollapse,  // Economic collapse recovery choice
   listenToGameState,
   stopListeningToGameState,
   leaveGame,
@@ -99,6 +102,7 @@ function setupEventListeners() {
   document.getElementById('actionEmergencyCard').addEventListener('click', () => playEmergencyCard());
   document.getElementById('actionWar').addEventListener('click', showWarModal);
   document.getElementById('actionTrade').addEventListener('click', showTradeModal);
+  document.getElementById('actionEconomicCollapse').addEventListener('click', showEconomicCollapseModal);
   document.getElementById('btnAdvancePhase').addEventListener('click', () => advancePhase());
   document.getElementById('leaveGameBtn2').addEventListener('click', handleLeaveGame);
   
@@ -107,8 +111,11 @@ function setupEventListeners() {
   document.getElementById('closeTradeModal').addEventListener('click', hideTradeModal);
   document.getElementById('closeRebellionModal').addEventListener('click', hideRebellionModal);
   document.getElementById('closeDiceResultModal').addEventListener('click', hideDiceResultModal);
+  document.getElementById('closeEconomicCollapseModal').addEventListener('click', hideEconomicCollapseModal);
   document.getElementById('btnDeclareWar').addEventListener('click', handleDeclareWar);
   document.getElementById('btnSendTrade').addEventListener('click', handleSendTrade);
+  document.getElementById('btnCollapseDrawCard').addEventListener('click', () => handleCollapseChoice(true));
+  document.getElementById('btnCollapseTakeUnrest').addEventListener('click', () => handleCollapseChoice(false));
 }
 
 // Handle Create Game
@@ -323,6 +330,19 @@ function hideDiceResultModal() {
   document.getElementById('diceResultModal').classList.add('hidden');
 }
 
+function showEconomicCollapseModal() {
+  document.getElementById('economicCollapseModal').classList.remove('hidden');
+}
+
+function hideEconomicCollapseModal() {
+  document.getElementById('economicCollapseModal').classList.add('hidden');
+}
+
+async function handleCollapseChoice(drawCard) {
+  hideEconomicCollapseModal();
+  await handleEconomicCollapse(drawCard);
+}
+
 // Update Lobby UI
 function updateLobbyUI(game) {
   if (!game) return;
@@ -390,9 +410,24 @@ function updateGameUI(game) {
   player.hand.forEach((card, index) => {
     const cardDiv = document.createElement('div');
     cardDiv.className = `card card-${card.type}`;
+    
+    // Add visual indicator for locked cards
+    if (card.locked) {
+      cardDiv.classList.add('card-locked');
+      // Get opponent name for better tooltip
+      const opponent = game.players[card.lockedFor];
+      const opponentName = opponent ? opponent.name : 'unknown opponent';
+      cardDiv.title = `🔒 Locked (${card.role} in war with ${opponentName})`;
+    }
+    
     cardDiv.textContent = `${card.value}${card.suit}`;
     
-    if (isCleanupPhase) {
+    // Add lock emoji to locked cards
+    if (card.locked) {
+      cardDiv.textContent += ' 🔒';
+    }
+    
+    if (isCleanupPhase && !card.locked) {
       cardDiv.style.cursor = 'pointer';
       cardDiv.title = 'Click to discard this card';
       cardDiv.addEventListener('click', () => {
@@ -400,6 +435,12 @@ function updateGameUI(game) {
           playCard(index);
         }
       });
+    } else if (card.locked) {
+      cardDiv.style.cursor = 'not-allowed';
+      // Get opponent name for better tooltip
+      const opponent = game.players[card.lockedFor];
+      const opponentName = opponent ? opponent.name : 'unknown opponent';
+      cardDiv.title = `🔒 Locked (${card.role} in war with ${opponentName}) - Cannot discard`;
     } else {
       cardDiv.style.cursor = 'default';
       cardDiv.title = 'Cards can only be discarded during CLEANUP phase';
@@ -421,6 +462,17 @@ function updateGameUI(game) {
   document.getElementById('actionEmergencyCard').disabled = !isStateActionsPhase || !canTakeMoreActions || player.emergencyCardUsedThisRound || (player.emergencyCards || 0) <= 0;
   document.getElementById('actionWar').disabled = !isStateActionsPhase || !canTakeMoreActions;
   document.getElementById('actionTrade').disabled = !isStateActionsPhase || !canTakeMoreActions;
+  
+  // Show economic collapse button only if player has 0 economy cards during STATE_ACTIONS
+  const economyCards = player.hand.filter(c => c.type === 'economy');
+  const hasEconomicCollapse = economyCards.length === 0;
+  const collapseBtn = document.getElementById('actionEconomicCollapse');
+  if (hasEconomicCollapse && isStateActionsPhase) {
+    collapseBtn.style.display = 'block';
+    collapseBtn.disabled = false;
+  } else {
+    collapseBtn.style.display = 'none';
+  }
   
   // Update action hint
   let hintText = '';
@@ -661,6 +713,12 @@ window.rejectTrade = (tradeId) => {
   rejectTradeOffer(tradeId);
 };
 
+window.breakTrade = (tradeId) => {
+  if (confirm('⚠️ Breaking this trade will give you +10 unrest penalty. Are you sure?')) {
+    breakTrade(tradeId);
+  }
+};
+
 // Helper function to format resources for display
 function formatResources(resources) {
   const parts = [];
@@ -698,21 +756,57 @@ function updateTradeModal() {
     trade => trade.toId === playerId && trade.status === 'pending'
   );
   
-  if (pendingTrades.length === 0) {
+  const acceptedTrades = Object.values(currentGame.tradeOffers || {}).filter(
+    trade => (trade.toId === playerId || trade.fromId === playerId) && trade.status === 'accepted'
+  );
+  
+  if (pendingTrades.length === 0 && acceptedTrades.length === 0) {
     tradesList.innerHTML = '<p class="hint">No trade offers</p>';
   } else {
-    pendingTrades.forEach(trade => {
-      const tradeDiv = document.createElement('div');
-      tradeDiv.className = 'trade-offer';
-      tradeDiv.innerHTML = `
-        <p><strong>From ${trade.fromName}:</strong></p>
-        <p>Offers: ${formatResources(trade.offer)}</p>
-        <p>Requests: ${formatResources(trade.request)}</p>
-        <button class="btn btn-success" onclick="window.acceptTrade('${trade.id}')">Accept</button>
-        <button class="btn btn-danger" onclick="window.rejectTrade('${trade.id}')">Reject</button>
-      `;
-      tradesList.appendChild(tradeDiv);
-    });
+    tradesList.innerHTML = ''; // Clear previous content
+    
+    // Show pending trades
+    if (pendingTrades.length > 0) {
+      const pendingHeader = document.createElement('h4');
+      pendingHeader.textContent = 'Pending Offers:';
+      tradesList.appendChild(pendingHeader);
+      
+      pendingTrades.forEach(trade => {
+        const tradeDiv = document.createElement('div');
+        tradeDiv.className = 'trade-offer';
+        tradeDiv.innerHTML = `
+          <p><strong>From ${trade.fromName}:</strong></p>
+          <p>Offers: ${formatResources(trade.offer)}</p>
+          <p>Requests: ${formatResources(trade.request)}</p>
+          <button class="btn btn-success" onclick="window.acceptTrade('${trade.id}')">Accept</button>
+          <button class="btn btn-danger" onclick="window.rejectTrade('${trade.id}')">Reject</button>
+        `;
+        tradesList.appendChild(tradeDiv);
+      });
+    }
+    
+    // Show accepted trades with break option
+    if (acceptedTrades.length > 0) {
+      const activeHeader = document.createElement('h4');
+      activeHeader.style.marginTop = '20px';
+      activeHeader.textContent = 'Active Deals:';
+      tradesList.appendChild(activeHeader);
+      
+      acceptedTrades.forEach(trade => {
+        const tradeDiv = document.createElement('div');
+        tradeDiv.className = 'trade-offer';
+        const isInitiator = trade.fromId === playerId;
+        tradeDiv.innerHTML = `
+          <p><strong>${isInitiator ? 'To' : 'From'} ${isInitiator ? trade.toName : trade.fromName}:</strong></p>
+          <p>You give: ${formatResources(isInitiator ? trade.offer : trade.request)}</p>
+          <p>You get: ${formatResources(isInitiator ? trade.request : trade.offer)}</p>
+          <button class="btn btn-danger" onclick="window.breakTrade('${trade.id}')" style="background-color: #f44336;">
+            ⚠️ Break Deal (+10 Unrest Penalty)
+          </button>
+        `;
+        tradesList.appendChild(tradeDiv);
+      });
+    }
   }
 }
 

@@ -487,6 +487,18 @@ button:disabled, .btn:disabled {
   color: #666;
 }
 
+.card-locked {
+  opacity: 0.7;
+  border: 2px solid #ff9800;
+  background: linear-gradient(135deg, #fff 0%, #ffe0b2 100%);
+  box-shadow: 0 0 10px rgba(255, 152, 0, 0.5);
+}
+
+.card-locked:hover {
+  transform: none;
+  cursor: not-allowed;
+}
+
 /* Actions */
 .actions-grid {
   display: grid;

@@ -145,6 +145,7 @@
           <button id="actionEmergencyCard" class="action-btn">Play Emergency Card</button>
           <button id="actionWar" class="action-btn">War Actions</button>
           <button id="actionTrade" class="action-btn">Trading</button>
+          <button id="actionEconomicCollapse" class="action-btn" style="display: none; background-color: #f44336;">⚠️ Economic Collapse Recovery</button>
         </div>
         <p id="actionHint" class="hint">Actions available in STATE_ACTIONS phase</p>
       </div>
@@ -238,6 +239,26 @@
           </div>
         </div>
         <button id="closeTradeModal" class="btn btn-danger">Close</button>
+      </div>
+    </div>
+
+    <!-- Economic Collapse Choice Modal -->
+    <div id="economicCollapseModal" class="modal hidden">
+      <div class="modal-content">
+        <h2>⚠️ Economic Collapse</h2>
+        <div id="economicCollapseModalBody">
+          <p class="hint">You have 0 economy cards. Choose a recovery option:</p>
+          <div class="section">
+            <button id="btnCollapseDrawCard" class="btn btn-primary" style="width: 100%; margin-bottom: 10px;">
+              Draw Emergency Card from Deck
+              <br><small>Red card = No penalty | Black card = +30 Unrest</small>
+            </button>
+            <button id="btnCollapseTakeUnrest" class="btn btn-danger" style="width: 100%;">
+              Take +20 Unrest (Safe Option)
+            </button>
+          </div>
+        </div>
+        <button id="closeEconomicCollapseModal" class="btn btn-secondary" style="margin-top: 10px;">Cancel</button>
       </div>
     </div>
 
