@@ -140,6 +140,10 @@ async function createGame(playerName, enableNaturalEvents = true) {
           actionsUsed: 0  // Track total actions used this round
         },
         wars: {},
+        militaryAssignments: {
+          // Tracks military cards assigned to roles during war
+          // Key: opponent player ID, Value: { frontline: [cardIndices], garrison: [cardIndices], reserve: [cardIndices] }
+        },
         rebellion: null,
         collapsed: false
       }
@@ -229,6 +233,10 @@ async function joinGame(gameCode, playerName) {
           actionsUsed: 0  // Track total actions used this round
         },
         wars: {},
+        militaryAssignments: {
+          // Tracks military cards assigned to roles during war
+          // Key: opponent player ID, Value: { frontline: [cardIndices], garrison: [cardIndices], reserve: [cardIndices] }
+        },
         rebellion: null,
         collapsed: false
       };
@@ -307,6 +315,113 @@ function calculatePopulation(luxury, food, morale, military) {
   return Math.floor((luxury * Math.sqrt(food)) / moraleDivisor) + military;
 }
 
+// Calculate Assigned Military Strength
+function calculateAssignedMilitary(player, targetPlayerId) {
+  // If player has military assignments for this war, calculate from assigned cards
+  // Otherwise, use total military (backward compatibility for ongoing wars)
+  if (!player.militaryAssignments || !player.militaryAssignments[targetPlayerId]) {
+    return player.stats.military;
+  }
+  
+  const assignments = player.militaryAssignments[targetPlayerId];
+  let strength = 0;
+  
+  // Add frontline and reserve to battle strength (garrison doesn't participate unless needed)
+  const combatCards = [...assignments.frontline, ...assignments.reserve];
+  
+  for (const cardIndex of combatCards) {
+    if (cardIndex >= 0 && cardIndex < player.hand.length) {
+      const card = player.hand[cardIndex];
+      if (card.type === 'military') {
+        strength += card.numValue;
+      }
+    }
+  }
+  
+  return strength;
+}
+
+// Remove Casualties from Assigned Military
+function removeCasualties(player, targetPlayerId, cardsToRemove) {
+  // If no assignments, remove randomly as before
+  if (!player.militaryAssignments || !player.militaryAssignments[targetPlayerId]) {
+    for (let i = 0; i < cardsToRemove; i++) {
+      const militaryCardIndex = player.hand.findIndex(c => c.type === 'military' && !c.locked);
+      if (militaryCardIndex !== -1) {
+        const removedCard = player.hand.splice(militaryCardIndex, 1)[0];
+        if (!player.discardPile) player.discardPile = [];
+        player.discardPile.push(removedCard);
+      }
+    }
+    return;
+  }
+  
+  const assignments = player.militaryAssignments[targetPlayerId];
+  let removed = 0;
+  
+  // Remove from frontline first
+  while (removed < cardsToRemove && assignments.frontline.length > 0) {
+    // Always remove from end since we're modifying indices
+    const cardIndex = assignments.frontline.pop();
+    if (cardIndex >= 0 && cardIndex < player.hand.length) {
+      const removedCard = player.hand.splice(cardIndex, 1)[0];
+      if (!player.discardPile) player.discardPile = [];
+      player.discardPile.push(removedCard);
+      removed++;
+      
+      // Adjust remaining indices that are higher than removed index
+      const adjustIndices = (arr) => {
+        for (let i = 0; i < arr.length; i++) {
+          if (arr[i] > cardIndex) arr[i]--;
+        }
+      };
+      adjustIndices(assignments.frontline);
+      adjustIndices(assignments.garrison);
+      adjustIndices(assignments.reserve);
+    }
+  }
+  
+  // Then remove from reserve
+  while (removed < cardsToRemove && assignments.reserve.length > 0) {
+    const cardIndex = assignments.reserve.pop();
+    if (cardIndex >= 0 && cardIndex < player.hand.length) {
+      const removedCard = player.hand.splice(cardIndex, 1)[0];
+      if (!player.discardPile) player.discardPile = [];
+      player.discardPile.push(removedCard);
+      removed++;
+      
+      const adjustIndices = (arr) => {
+        for (let i = 0; i < arr.length; i++) {
+          if (arr[i] > cardIndex) arr[i]--;
+        }
+      };
+      adjustIndices(assignments.frontline);
+      adjustIndices(assignments.garrison);
+      adjustIndices(assignments.reserve);
+    }
+  }
+  
+  // Finally, if still need to remove more, take from garrison (all lost scenario)
+  while (removed < cardsToRemove && assignments.garrison.length > 0) {
+    const cardIndex = assignments.garrison.pop();
+    if (cardIndex >= 0 && cardIndex < player.hand.length) {
+      const removedCard = player.hand.splice(cardIndex, 1)[0];
+      if (!player.discardPile) player.discardPile = [];
+      player.discardPile.push(removedCard);
+      removed++;
+      
+      const adjustIndices = (arr) => {
+        for (let i = 0; i < arr.length; i++) {
+          if (arr[i] > cardIndex) arr[i]--;
+        }
+      };
+      adjustIndices(assignments.frontline);
+      adjustIndices(assignments.garrison);
+      adjustIndices(assignments.reserve);
+    }
+  }
+}
+
 // Calculate Maximum Allowed Actions (based on unrest level and rebellion stage)
 function getMaxActions(player) {
   // Rulebook: "You may take up to 2 State Actions, minus penalties"
@@ -332,6 +447,31 @@ function validateActionLimit(player) {
   if (player.actions.actionsUsed >= maxActions) {
     throw new Error(`Cannot perform more actions this round (max ${maxActions} due to unrest/rebellion)`);
   }
+}
+
+// Release Locked Military Cards for a War
+function releaseLockedCards(player, targetPlayerId) {
+  if (!player.militaryAssignments || !player.militaryAssignments[targetPlayerId]) {
+    return;
+  }
+  
+  const assignments = player.militaryAssignments[targetPlayerId];
+  const allAssignments = [...assignments.frontline, ...assignments.garrison, ...assignments.reserve];
+  
+  // Unlock all cards assigned to this war
+  for (const cardIndex of allAssignments) {
+    if (cardIndex >= 0 && cardIndex < player.hand.length) {
+      const card = player.hand[cardIndex];
+      if (card.lockedFor === targetPlayerId) {
+        delete card.locked;
+        delete card.lockedFor;
+        delete card.role;
+      }
+    }
+  }
+  
+  // Clear the assignments
+  delete player.militaryAssignments[targetPlayerId];
 }
 
 // Perform Upkeep Phase
@@ -503,7 +643,8 @@ async function performWar() {
           const target = game.players[targetId];
           
           if (!target || target.collapsed) {
-            // War ended because target collapsed
+            // War ended because target collapsed - release locked cards
+            releaseLockedCards(player, targetId);
             delete player.wars[targetId];
             continue;
           }
@@ -512,8 +653,9 @@ async function performWar() {
           if (playerId > targetId) continue;
           
           // Battle resolution: compare military
-          const attackerMilitary = player.stats.military;
-          const defenderMilitary = target.stats.military;
+          // Use assigned military if available, otherwise total military
+          const attackerMilitary = calculateAssignedMilitary(player, targetId);
+          const defenderMilitary = calculateAssignedMilitary(target, playerId);
           
           let trackIncrease = 0;
           
@@ -529,8 +671,15 @@ async function performWar() {
             
             // Casualty roll for defender
             const casualtyDie = Math.floor(Math.random() * 6) + 1;
-            // Map die roll to number of cards to remove (out of 6)
-            const cardsToRemove = Math.floor(target.hand.filter(c => c.type === 'military').length * casualtyDie / 6);
+            // Get assigned military cards or all military cards
+            let targetMilitaryCount = 0;
+            if (target.militaryAssignments && target.militaryAssignments[playerId]) {
+              const assignments = target.militaryAssignments[playerId];
+              targetMilitaryCount = assignments.frontline.length + assignments.reserve.length + assignments.garrison.length;
+            } else {
+              targetMilitaryCount = target.hand.filter(c => c.type === 'military').length;
+            }
+            const cardsToRemove = Math.floor(targetMilitaryCount * casualtyDie / 6);
             
             // Store battle results for UI
             war.lastBattle = {
@@ -542,21 +691,23 @@ async function performWar() {
               trackChange: trackIncrease
             };
             
-            for (let i = 0; i < cardsToRemove; i++) {
-              const militaryCardIndex = target.hand.findIndex(c => c.type === 'military');
-              if (militaryCardIndex !== -1) {
-                const removedCard = target.hand.splice(militaryCardIndex, 1)[0];
-                target.discardPile.push(removedCard);
-              }
-            }
+            // Remove casualties using new function
+            removeCasualties(target, playerId, cardsToRemove);
           } else if (defenderMilitary > attackerMilitary) {
             // Defender victory - war track decreases
             trackIncrease = -1;
             
             // Casualty roll for attacker
             const casualtyDie = Math.floor(Math.random() * 6) + 1;
-            // Map die roll to number of cards to remove (out of 6)
-            const cardsToRemove = Math.floor(player.hand.filter(c => c.type === 'military').length * casualtyDie / 6);
+            // Get assigned military cards or all military cards
+            let attackerMilitaryCount = 0;
+            if (player.militaryAssignments && player.militaryAssignments[targetId]) {
+              const assignments = player.militaryAssignments[targetId];
+              attackerMilitaryCount = assignments.frontline.length + assignments.reserve.length + assignments.garrison.length;
+            } else {
+              attackerMilitaryCount = player.hand.filter(c => c.type === 'military').length;
+            }
+            const cardsToRemove = Math.floor(attackerMilitaryCount * casualtyDie / 6);
             
             // Store battle results for UI
             war.lastBattle = {
@@ -568,13 +719,8 @@ async function performWar() {
               trackChange: trackIncrease
             };
             
-            for (let i = 0; i < cardsToRemove; i++) {
-              const militaryCardIndex = player.hand.findIndex(c => c.type === 'military');
-              if (militaryCardIndex !== -1) {
-                const removedCard = player.hand.splice(militaryCardIndex, 1)[0];
-                player.discardPile.push(removedCard);
-              }
-            }
+            // Remove casualties using new function
+            removeCasualties(player, targetId, cardsToRemove);
           } else {
             // Tie - attacker wins ties
             trackIncrease = 1;
@@ -610,6 +756,10 @@ async function performWar() {
             
             // Occupying player gets +5 unrest per round
             player.stats.unrest += 5;
+            
+            // War has ended - release locked cards for both players
+            releaseLockedCards(player, targetId);
+            releaseLockedCards(target, playerId);
           }
         }
       }
@@ -653,6 +803,18 @@ async function performRebellion() {
         govDice += Math.floor(player.stats.military / 20);
         // Rulebook: "+1 if Emergency Card used"
         if (player.emergencyCardUsedThisRound) govDice += 1;
+        
+        // Garrison bonus: +2 dice per garrison card across all active wars
+        if (player.militaryAssignments) {
+          let totalGarrisonCards = 0;
+          for (const targetId in player.militaryAssignments) {
+            const assignments = player.militaryAssignments[targetId];
+            if (assignments.garrison) {
+              totalGarrisonCards += assignments.garrison.length;
+            }
+          }
+          govDice += totalGarrisonCards * 2;
+        }
         
         // Roll dice
         let rebelTotal = 0;
@@ -1414,6 +1576,123 @@ async function declareWar(targetPlayerId) {
   } catch (error) {
     console.error('❌ Failed to declare war:', error);
     alert('❌ ' + error.message);
+  }
+}
+
+// Assign Military Cards to War Roles
+async function assignMilitary(targetPlayerId, assignments) {
+  if (!db || !currentGameCode || !currentPlayerId) return;
+
+  const gameRef = ref(db, `games/${currentGameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (game) => {
+      if (!game) return game;
+      
+      // Can assign military during STATE_ACTIONS or WAR phase
+      if (game.phase !== 'STATE_ACTIONS' && game.phase !== 'WAR') {
+        throw new Error('Can only assign military during STATE_ACTIONS or WAR phase');
+      }
+      
+      const player = game.players[currentPlayerId];
+      if (!player) return game;
+      
+      // Verify war exists
+      if (!player.wars[targetPlayerId]) {
+        throw new Error('Not at war with this player');
+      }
+      
+      // Initialize military assignments for this war if not exists
+      if (!player.militaryAssignments) {
+        player.militaryAssignments = {};
+      }
+      if (!player.militaryAssignments[targetPlayerId]) {
+        player.militaryAssignments[targetPlayerId] = {
+          frontline: [],
+          garrison: [],
+          reserve: []
+        };
+      }
+      
+      // Validate assignments - ensure card indices are valid and are military cards
+      const frontline = assignments.frontline || [];
+      const garrison = assignments.garrison || [];
+      const reserve = assignments.reserve || [];
+      
+      const allAssignments = [...frontline, ...garrison, ...reserve];
+      
+      // Check for duplicates
+      const uniqueAssignments = new Set(allAssignments);
+      if (uniqueAssignments.size !== allAssignments.length) {
+        throw new Error('Cannot assign the same card to multiple roles');
+      }
+      
+      // Validate all indices are valid military cards
+      for (const cardIndex of allAssignments) {
+        if (cardIndex < 0 || cardIndex >= player.hand.length) {
+          throw new Error(`Invalid card index: ${cardIndex}`);
+        }
+        const card = player.hand[cardIndex];
+        if (card.type !== 'military') {
+          throw new Error(`Card at index ${cardIndex} is not a military card`);
+        }
+        // Check if card is already locked for another war
+        if (card.locked && card.lockedFor !== targetPlayerId) {
+          throw new Error(`Card at index ${cardIndex} is locked for another war`);
+        }
+      }
+      
+      // First, unlock all cards that were previously assigned to this war
+      if (player.militaryAssignments[targetPlayerId]) {
+        const oldAssignments = [
+          ...player.militaryAssignments[targetPlayerId].frontline,
+          ...player.militaryAssignments[targetPlayerId].garrison,
+          ...player.militaryAssignments[targetPlayerId].reserve
+        ];
+        for (const cardIndex of oldAssignments) {
+          if (cardIndex >= 0 && cardIndex < player.hand.length) {
+            const card = player.hand[cardIndex];
+            if (card.lockedFor === targetPlayerId) {
+              delete card.locked;
+              delete card.lockedFor;
+            }
+          }
+        }
+      }
+      
+      // Apply new assignments and lock cards
+      player.militaryAssignments[targetPlayerId] = {
+        frontline: [...frontline],
+        garrison: [...garrison],
+        reserve: [...reserve]
+      };
+      
+      // Lock assigned cards
+      for (const cardIndex of frontline) {
+        player.hand[cardIndex].locked = true;
+        player.hand[cardIndex].lockedFor = targetPlayerId;
+        player.hand[cardIndex].role = 'frontline';
+      }
+      for (const cardIndex of garrison) {
+        player.hand[cardIndex].locked = true;
+        player.hand[cardIndex].lockedFor = targetPlayerId;
+        player.hand[cardIndex].role = 'garrison';
+      }
+      for (const cardIndex of reserve) {
+        player.hand[cardIndex].locked = true;
+        player.hand[cardIndex].lockedFor = targetPlayerId;
+        player.hand[cardIndex].role = 'reserve';
+      }
+      
+      return game;
+    });
+    
+    console.log('✅ Military assigned');
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to assign military:', error);
+    alert('❌ ' + error.message);
+    return false;
   }
 }
 
