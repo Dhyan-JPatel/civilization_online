@@ -1034,7 +1034,23 @@ async function buyCard() {
       player.actions.boughtCard = true;
       player.actions.actionsUsed += 1; // Increment action counter
       
-      // Economy will be recalculated automatically
+      // Consume economy cards worth 2 economy
+      if (!player.discardPile) {
+        player.discardPile = [];
+      }
+      
+      let economyNeeded = 2;
+      for (let i = player.hand.length - 1; i >= 0 && economyNeeded > 0; i--) {
+        const card = player.hand[i];
+        if (card.type === 'economy') {
+          const cardValue = card.numValue;
+          const removed = player.hand.splice(i, 1)[0];
+          player.discardPile.push(removed);
+          economyNeeded -= cardValue;
+        }
+      }
+      
+      // Economy will be recalculated automatically from remaining cards
       
       return game;
     });
@@ -1084,6 +1100,22 @@ async function buyFarm() {
       player.stats.farms += 1;
       player.actions.boughtFarm = true;
       player.actions.actionsUsed += 1; // Increment action counter
+      
+      // Consume economy cards worth 5 economy
+      if (!player.discardPile) {
+        player.discardPile = [];
+      }
+      
+      let economyNeeded = 5;
+      for (let i = player.hand.length - 1; i >= 0 && economyNeeded > 0; i--) {
+        const card = player.hand[i];
+        if (card.type === 'economy') {
+          const cardValue = card.numValue;
+          const removed = player.hand.splice(i, 1)[0];
+          player.discardPile.push(removed);
+          economyNeeded -= cardValue;
+        }
+      }
       
       return game;
     });
@@ -1140,6 +1172,22 @@ async function buyLuxury() {
       player.lastLuxuryRoll = diceRoll;
       player.actions.boughtLuxury = true;
       player.actions.actionsUsed += 1; // Increment action counter
+      
+      // Consume economy cards worth 1 economy
+      if (!player.discardPile) {
+        player.discardPile = [];
+      }
+      
+      let economyNeeded = 1;
+      for (let i = player.hand.length - 1; i >= 0 && economyNeeded > 0; i--) {
+        const card = player.hand[i];
+        if (card.type === 'economy') {
+          const cardValue = card.numValue;
+          const removed = player.hand.splice(i, 1)[0];
+          player.discardPile.push(removed);
+          economyNeeded -= cardValue;
+        }
+      }
       
       return game;
     });
