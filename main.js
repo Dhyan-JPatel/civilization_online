@@ -410,7 +410,7 @@ function updateGameUI(game) {
   
   // Update action buttons based on phase and action limits
   const isStateActionsPhase = game.phase === 'STATE_ACTIONS';
-  const maxActions = getMaxActions(player.stats.unrest);
+  const maxActions = getMaxActions(player);
   const actionsUsed = player.actions.actionsUsed || 0;
   const canTakeMoreActions = actionsUsed < maxActions;
   
