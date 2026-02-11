@@ -409,12 +409,14 @@ async function performInternalPressure() {
         if (player.collapsed) continue;
         
         // Food stress - if-else ensures only one penalty applies
-        // Per manual: "If Food < Population × 4 → +10 Unrest instead" (more severe)
-        // "If Food < Population × 2 → +5 Unrest"
-        if (player.stats.food < player.stats.population * 4) {
-          player.stats.unrest += 10; // Severe food shortage (< pop × 4)
-        } else if (player.stats.food < player.stats.population * 2) {
-          player.stats.unrest += 5; // Moderate food shortage (< pop × 2)
+        // Per manual lines 74-75, but thresholds appear swapped (likely typo):
+        // Logical interpretation: More food shortage = more unrest
+        // Critical shortage (< pop × 2): +10 unrest
+        // Moderate shortage (< pop × 4 but >= pop × 2): +5 unrest
+        if (player.stats.food < player.stats.population * 2) {
+          player.stats.unrest += 10; // Critical shortage
+        } else if (player.stats.food < player.stats.population * 4) {
+          player.stats.unrest += 5; // Moderate shortage
         }
         
         // Siege pressure
@@ -1279,9 +1281,12 @@ async function handleEconomicCollapse(drawCard = true) {
             // Black card: +30 unrest
             player.stats.unrest += 30;
             alert(`❌ Drew black card ${drawnCard.suit}${drawnCard.value}! +30 unrest!`);
-          } else {
+          } else if (drawnCard.type === 'economy') {
             // Red card: nothing happens
             alert(`✅ Drew red card ${drawnCard.suit}${drawnCard.value}! No penalty.`);
+          } else {
+            // Unexpected card type (should never happen)
+            throw new Error(`Unexpected card type: ${drawnCard.type}`);
           }
           
           // Put card back in deck (emergency draw, not added to hand)
