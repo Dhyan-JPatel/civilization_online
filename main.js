@@ -767,7 +767,10 @@ function updateTradeModal() {
     
     // Show pending trades
     if (pendingTrades.length > 0) {
-      tradesList.innerHTML += '<h4>Pending Offers:</h4>';
+      const pendingHeader = document.createElement('h4');
+      pendingHeader.textContent = 'Pending Offers:';
+      tradesList.appendChild(pendingHeader);
+      
       pendingTrades.forEach(trade => {
         const tradeDiv = document.createElement('div');
         tradeDiv.className = 'trade-offer';
@@ -784,7 +787,11 @@ function updateTradeModal() {
     
     // Show accepted trades with break option
     if (acceptedTrades.length > 0) {
-      tradesList.innerHTML += '<h4 style="margin-top: 20px;">Active Deals:</h4>';
+      const activeHeader = document.createElement('h4');
+      activeHeader.style.marginTop = '20px';
+      activeHeader.textContent = 'Active Deals:';
+      tradesList.appendChild(activeHeader);
+      
       acceptedTrades.forEach(trade => {
         const tradeDiv = document.createElement('div');
         tradeDiv.className = 'trade-offer';

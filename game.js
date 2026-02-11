@@ -823,12 +823,15 @@ async function performRebellion() {
         if (player.emergencyCardUsedThisRound) govDice += 1;
         
         // Garrison bonus: +2 dice per garrison card across all active wars
-        if (player.militaryAssignments) {
+        if (player.militaryAssignments && player.wars) {
           let totalGarrisonCards = 0;
           for (const targetId in player.militaryAssignments) {
-            const assignments = player.militaryAssignments[targetId];
-            if (assignments.garrison) {
-              totalGarrisonCards += assignments.garrison.length;
+            // Only count garrison if the war is still active
+            if (player.wars[targetId]) {
+              const assignments = player.militaryAssignments[targetId];
+              if (assignments.garrison) {
+                totalGarrisonCards += assignments.garrison.length;
+              }
             }
           }
           govDice += totalGarrisonCards * 2;
