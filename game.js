@@ -128,13 +128,16 @@ async function createGame(playerName, enableNaturalEvents = true) {
         hand: hand,
         deck: remainingDeck,
         discardPile: [],
+        emergencyCards: 2,  // Each player starts with 2 emergency cards
+        emergencyCardUsedThisRound: false,  // Track if emergency card used this round
         actions: {
           boughtCard: false,
           boughtFarm: false,
           boughtLuxury: false,
           reducedUnrest: false,
           declaredWar: false,
-          traded: false
+          traded: false,
+          actionsUsed: 0  // Track total actions used this round
         },
         wars: {},
         rebellion: null,
@@ -214,13 +217,16 @@ async function joinGame(gameCode, playerName) {
         hand: hand,
         deck: remainingDeck,
         discardPile: [],
+        emergencyCards: 2,  // Each player starts with 2 emergency cards
+        emergencyCardUsedThisRound: false,  // Track if emergency card used this round
         actions: {
           boughtCard: false,
           boughtFarm: false,
           boughtLuxury: false,
           reducedUnrest: false,
           declaredWar: false,
-          traded: false
+          traded: false,
+          actionsUsed: 0  // Track total actions used this round
         },
         wars: {},
         rebellion: null,
@@ -299,6 +305,24 @@ function calculateMorale(luxury, food) {
 function calculatePopulation(luxury, food, morale, military) {
   const moraleDivisor = Math.max(1, (morale / 10) + 1); // Ensure divisor is at least 1
   return Math.floor((luxury * Math.sqrt(food)) / moraleDivisor) + military;
+}
+
+// Calculate Maximum Allowed Actions (based on unrest level)
+function getMaxActions(unrest) {
+  // Rulebook: "You may take up to 2 State Actions, minus penalties"
+  // "30+ Unrest – Lose 1 State Action"
+  if (unrest >= 30) {
+    return 1; // Lost 1 action due to high unrest
+  }
+  return 2; // Normal max actions
+}
+
+// Validate Action Limit (helper for action functions)
+function validateActionLimit(player) {
+  const maxActions = getMaxActions(player.stats.unrest);
+  if (player.actions.actionsUsed >= maxActions) {
+    throw new Error(`Cannot perform more actions this round (max ${maxActions} due to unrest)`);
+  }
 }
 
 // Perform Upkeep Phase
@@ -431,8 +455,10 @@ async function resetActions() {
         boughtLuxury: false,
         reducedUnrest: false,
         declaredWar: false,
-        traded: false
+        traded: false,
+        actionsUsed: 0  // Reset action counter each round
       };
+      updates[`${playerId}/emergencyCardUsedThisRound`] = false;  // Reset emergency card flag
       updates[`${playerId}/interferenceThisRound`] = {};
       updates[`${playerId}/lastLuxuryRoll`] = null; // Clear stale dice result
     }
@@ -613,6 +639,8 @@ async function performRebellion() {
         // Calculate government dice pool
         let govDice = 2; // Base
         govDice += Math.floor(player.stats.military / 20);
+        // Rulebook: "+1 if Emergency Card used"
+        if (player.emergencyCardUsedThisRound) govDice += 1;
         
         // Roll dice
         let rebelTotal = 0;
@@ -954,6 +982,9 @@ async function buyCard() {
       const player = game.players[currentPlayerId];
       if (!player) return game;
       
+      // Check action limit based on unrest
+      validateActionLimit(player);
+      
       if (player.actions.boughtCard) {
         throw new Error('Already bought a card this round');
       }
@@ -983,6 +1014,7 @@ async function buyCard() {
       const drawnCard = player.deck.shift();
       player.hand.push(drawnCard);
       player.actions.boughtCard = true;
+      player.actions.actionsUsed += 1; // Increment action counter
       
       // Economy will be recalculated automatically
       
@@ -1015,6 +1047,9 @@ async function buyFarm() {
       const player = game.players[currentPlayerId];
       if (!player) return game;
       
+      // Check action limit based on unrest
+      validateActionLimit(player);
+      
       if (player.actions.boughtFarm) {
         throw new Error('Already bought a farm this round');
       }
@@ -1025,6 +1060,7 @@ async function buyFarm() {
       
       player.stats.farms += 1;
       player.actions.boughtFarm = true;
+      player.actions.actionsUsed += 1; // Increment action counter
       
       return game;
     });
@@ -1057,6 +1093,9 @@ async function buyLuxury() {
       const player = game.players[currentPlayerId];
       if (!player) return game;
       
+      // Check action limit based on unrest
+      validateActionLimit(player);
+      
       if (player.actions.boughtLuxury) {
         throw new Error('Already bought luxury this round');
       }
@@ -1072,6 +1111,7 @@ async function buyLuxury() {
       player.stats.luxury += diceRoll;
       player.lastLuxuryRoll = diceRoll;
       player.actions.boughtLuxury = true;
+      player.actions.actionsUsed += 1; // Increment action counter
       
       return game;
     });
@@ -1145,12 +1185,16 @@ async function reduceUnrest() {
       const player = game.players[currentPlayerId];
       if (!player) return game;
       
+      // Check action limit based on unrest
+      validateActionLimit(player);
+      
       if (player.actions.reducedUnrest) {
         throw new Error('Already reduced unrest this round');
       }
       
       player.stats.unrest = Math.max(0, player.stats.unrest - 10);
       player.actions.reducedUnrest = true;
+      player.actions.actionsUsed += 1; // Increment action counter
       
       return game;
     });
@@ -1185,6 +1229,9 @@ async function declareWar(targetPlayerId) {
         throw new Error('Player not found');
       }
       
+      // Check action limit based on unrest
+      validateActionLimit(player);
+      
       if (player.actions.declaredWar) {
         throw new Error('Already declared war this round');
       }
@@ -1206,6 +1253,7 @@ async function declareWar(targetPlayerId) {
       };
       
       player.actions.declaredWar = true;
+      player.actions.actionsUsed += 1; // Increment action counter
       
       return game;
     });
@@ -1214,6 +1262,52 @@ async function declareWar(targetPlayerId) {
     alert('✅ War declared!');
   } catch (error) {
     console.error('❌ Failed to declare war:', error);
+    alert('❌ ' + error.message);
+  }
+}
+
+// Play Emergency Card
+async function playEmergencyCard() {
+  if (!db || !currentGameCode || !currentPlayerId) return;
+
+  const gameRef = ref(db, `games/${currentGameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (game) => {
+      if (!game) return game;
+      
+      // Phase validation - emergency cards can be played during STATE_ACTIONS phase
+      if (game.phase !== 'STATE_ACTIONS') {
+        throw new Error('Can only play emergency cards during STATE_ACTIONS phase');
+      }
+      
+      const player = game.players[currentPlayerId];
+      if (!player) return game;
+      
+      // Check action limit based on unrest
+      validateActionLimit(player);
+      
+      if (player.emergencyCards <= 0) {
+        throw new Error('No emergency cards remaining');
+      }
+      
+      if (player.emergencyCardUsedThisRound) {
+        throw new Error('Already used an emergency card this round');
+      }
+      
+      // Use emergency card - reduces unrest by 20
+      player.emergencyCards -= 1;
+      player.emergencyCardUsedThisRound = true;
+      player.stats.unrest = Math.max(0, player.stats.unrest - 20);
+      player.actions.actionsUsed += 1; // Increment action counter
+      
+      return game;
+    });
+    
+    console.log('✅ Emergency card played');
+    alert('✅ Emergency card used! -20 unrest\n(Will also grant +1 dice to government if rebellion occurs)');
+  } catch (error) {
+    console.error('❌ Failed to play emergency card:', error);
     alert('❌ ' + error.message);
   }
 }
@@ -1239,6 +1333,9 @@ async function sendTradeOffer(targetPlayerId, offer, request) {
       if (!player || !target) {
         throw new Error('Player not found');
       }
+      
+      // Check action limit based on unrest
+      validateActionLimit(player);
       
       if (player.actions.traded) {
         throw new Error('Already made a trade offer this round');
@@ -1276,6 +1373,7 @@ async function sendTradeOffer(targetPlayerId, offer, request) {
       };
       
       player.actions.traded = true;
+      player.actions.actionsUsed += 1; // Increment action counter
       
       return game;
     });
@@ -1497,6 +1595,7 @@ export {
   buyLuxury,
   reduceUnrest,
   declareWar,
+  playEmergencyCard,  // Play emergency cards
   sendTradeOffer,
   acceptTradeOffer,
   rejectTradeOffer,
@@ -1504,6 +1603,7 @@ export {
   listenToGameState,
   stopListeningToGameState,
   leaveGame,
+  getMaxActions,  // Export helper for UI to check action limits
   CREATOR_KEY
 };
 
