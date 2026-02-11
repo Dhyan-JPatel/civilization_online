@@ -474,6 +474,24 @@ function releaseLockedCards(player, targetPlayerId) {
   delete player.militaryAssignments[targetPlayerId];
 }
 
+// Consume Economy Cards (helper for buy actions)
+function consumeEconomy(player, amount) {
+  if (!player.discardPile) {
+    player.discardPile = [];
+  }
+  
+  let economyNeeded = amount;
+  for (let i = player.hand.length - 1; i >= 0 && economyNeeded > 0; i--) {
+    const card = player.hand[i];
+    if (card.type === 'economy') {
+      const cardValue = card.numValue;
+      const removed = player.hand.splice(i, 1)[0];
+      player.discardPile.push(removed);
+      economyNeeded -= cardValue;
+    }
+  }
+}
+
 // Perform Upkeep Phase
 async function performUpkeep() {
   if (!db || !currentGameCode) return;
@@ -1197,20 +1215,7 @@ async function buyCard() {
       player.actions.actionsUsed += 1; // Increment action counter
       
       // Consume economy cards worth 2 economy
-      if (!player.discardPile) {
-        player.discardPile = [];
-      }
-      
-      let economyNeeded = 2;
-      for (let i = player.hand.length - 1; i >= 0 && economyNeeded > 0; i--) {
-        const card = player.hand[i];
-        if (card.type === 'economy') {
-          const cardValue = card.numValue;
-          const removed = player.hand.splice(i, 1)[0];
-          player.discardPile.push(removed);
-          economyNeeded -= cardValue;
-        }
-      }
+      consumeEconomy(player, 2);
       
       // Economy will be recalculated automatically from remaining cards
       
@@ -1264,20 +1269,7 @@ async function buyFarm() {
       player.actions.actionsUsed += 1; // Increment action counter
       
       // Consume economy cards worth 5 economy
-      if (!player.discardPile) {
-        player.discardPile = [];
-      }
-      
-      let economyNeeded = 5;
-      for (let i = player.hand.length - 1; i >= 0 && economyNeeded > 0; i--) {
-        const card = player.hand[i];
-        if (card.type === 'economy') {
-          const cardValue = card.numValue;
-          const removed = player.hand.splice(i, 1)[0];
-          player.discardPile.push(removed);
-          economyNeeded -= cardValue;
-        }
-      }
+      consumeEconomy(player, 5);
       
       return game;
     });
@@ -1336,20 +1328,7 @@ async function buyLuxury() {
       player.actions.actionsUsed += 1; // Increment action counter
       
       // Consume economy cards worth 1 economy
-      if (!player.discardPile) {
-        player.discardPile = [];
-      }
-      
-      let economyNeeded = 1;
-      for (let i = player.hand.length - 1; i >= 0 && economyNeeded > 0; i--) {
-        const card = player.hand[i];
-        if (card.type === 'economy') {
-          const cardValue = card.numValue;
-          const removed = player.hand.splice(i, 1)[0];
-          player.discardPile.push(removed);
-          economyNeeded -= cardValue;
-        }
-      }
+      consumeEconomy(player, 1);
       
       return game;
     });
@@ -1387,7 +1366,9 @@ async function playCard(cardIndex) {
       
       // Check if card is locked (assigned to a war)
       if (card.locked) {
-        throw new Error(`Cannot discard this card - it is locked for war (${card.role} for ${card.lockedFor})`);
+        const opponent = game.players[card.lockedFor];
+        const opponentName = opponent ? opponent.name : 'unknown opponent';
+        throw new Error(`Cannot discard this card - it is locked as ${card.role} in war with ${opponentName}`);
       }
       
       // Initialize discard pile if it doesn't exist

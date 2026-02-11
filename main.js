@@ -414,7 +414,10 @@ function updateGameUI(game) {
     // Add visual indicator for locked cards
     if (card.locked) {
       cardDiv.classList.add('card-locked');
-      cardDiv.title = `🔒 Locked (${card.role} for war)`;
+      // Get opponent name for better tooltip
+      const opponent = game.players[card.lockedFor];
+      const opponentName = opponent ? opponent.name : 'unknown opponent';
+      cardDiv.title = `🔒 Locked (${card.role} in war with ${opponentName})`;
     }
     
     cardDiv.textContent = `${card.value}${card.suit}`;
@@ -434,7 +437,10 @@ function updateGameUI(game) {
       });
     } else if (card.locked) {
       cardDiv.style.cursor = 'not-allowed';
-      cardDiv.title = `🔒 Locked (${card.role} for war) - Cannot discard`;
+      // Get opponent name for better tooltip
+      const opponent = game.players[card.lockedFor];
+      const opponentName = opponent ? opponent.name : 'unknown opponent';
+      cardDiv.title = `🔒 Locked (${card.role} in war with ${opponentName}) - Cannot discard`;
     } else {
       cardDiv.style.cursor = 'default';
       cardDiv.title = 'Cards can only be discarded during CLEANUP phase';
