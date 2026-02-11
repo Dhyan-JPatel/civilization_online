@@ -317,6 +317,14 @@ function getMaxActions(unrest) {
   return 2; // Normal max actions
 }
 
+// Validate Action Limit (helper for action functions)
+function validateActionLimit(player) {
+  const maxActions = getMaxActions(player.stats.unrest);
+  if (player.actions.actionsUsed >= maxActions) {
+    throw new Error(`Cannot perform more actions this round (max ${maxActions} due to unrest)`);
+  }
+}
+
 // Perform Upkeep Phase
 async function performUpkeep() {
   if (!db || !currentGameCode) return;
@@ -975,10 +983,7 @@ async function buyCard() {
       if (!player) return game;
       
       // Check action limit based on unrest
-      const maxActions = getMaxActions(player.stats.unrest);
-      if (player.actions.actionsUsed >= maxActions) {
-        throw new Error(`Cannot perform more actions this round (max ${maxActions} due to unrest)`);
-      }
+      validateActionLimit(player);
       
       if (player.actions.boughtCard) {
         throw new Error('Already bought a card this round');
@@ -1043,10 +1048,7 @@ async function buyFarm() {
       if (!player) return game;
       
       // Check action limit based on unrest
-      const maxActions = getMaxActions(player.stats.unrest);
-      if (player.actions.actionsUsed >= maxActions) {
-        throw new Error(`Cannot perform more actions this round (max ${maxActions} due to unrest)`);
-      }
+      validateActionLimit(player);
       
       if (player.actions.boughtFarm) {
         throw new Error('Already bought a farm this round');
@@ -1092,10 +1094,7 @@ async function buyLuxury() {
       if (!player) return game;
       
       // Check action limit based on unrest
-      const maxActions = getMaxActions(player.stats.unrest);
-      if (player.actions.actionsUsed >= maxActions) {
-        throw new Error(`Cannot perform more actions this round (max ${maxActions} due to unrest)`);
-      }
+      validateActionLimit(player);
       
       if (player.actions.boughtLuxury) {
         throw new Error('Already bought luxury this round');
@@ -1187,10 +1186,7 @@ async function reduceUnrest() {
       if (!player) return game;
       
       // Check action limit based on unrest
-      const maxActions = getMaxActions(player.stats.unrest);
-      if (player.actions.actionsUsed >= maxActions) {
-        throw new Error(`Cannot perform more actions this round (max ${maxActions} due to unrest)`);
-      }
+      validateActionLimit(player);
       
       if (player.actions.reducedUnrest) {
         throw new Error('Already reduced unrest this round');
@@ -1234,10 +1230,7 @@ async function declareWar(targetPlayerId) {
       }
       
       // Check action limit based on unrest
-      const maxActions = getMaxActions(player.stats.unrest);
-      if (player.actions.actionsUsed >= maxActions) {
-        throw new Error(`Cannot perform more actions this round (max ${maxActions} due to unrest)`);
-      }
+      validateActionLimit(player);
       
       if (player.actions.declaredWar) {
         throw new Error('Already declared war this round');
@@ -1292,10 +1285,7 @@ async function playEmergencyCard() {
       if (!player) return game;
       
       // Check action limit based on unrest
-      const maxActions = getMaxActions(player.stats.unrest);
-      if (player.actions.actionsUsed >= maxActions) {
-        throw new Error(`Cannot perform more actions this round (max ${maxActions} due to unrest)`);
-      }
+      validateActionLimit(player);
       
       if (player.emergencyCards <= 0) {
         throw new Error('No emergency cards remaining');
@@ -1345,10 +1335,7 @@ async function sendTradeOffer(targetPlayerId, offer, request) {
       }
       
       // Check action limit based on unrest
-      const maxActions = getMaxActions(player.stats.unrest);
-      if (player.actions.actionsUsed >= maxActions) {
-        throw new Error(`Cannot perform more actions this round (max ${maxActions} due to unrest)`);
-      }
+      validateActionLimit(player);
       
       if (player.actions.traded) {
         throw new Error('Already made a trade offer this round');

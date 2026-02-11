@@ -9,6 +9,9 @@ test_config.html
 *.old.css
 *.old.*
 
+# Test files
+test_game_logic.js
+
 # Environment files
 .env
 .env.local

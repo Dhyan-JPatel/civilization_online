@@ -433,8 +433,6 @@ function updateGameUI(game) {
       hintText = '⚠️ INTERNAL_PRESSURE: Unrest increases are being applied';
       break;
     case 'STATE_ACTIONS':
-      const maxActions = getMaxActions(player.stats.unrest);
-      const actionsUsed = player.actions.actionsUsed || 0;
       const actionsRemaining = maxActions - actionsUsed;
       hintText = `🎯 STATE_ACTIONS: Take your actions for this round! (${actionsRemaining}/${maxActions} actions remaining)`;
       if (player.stats.unrest >= 30) {
