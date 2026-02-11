@@ -763,6 +763,8 @@ function updateTradeModal() {
   if (pendingTrades.length === 0 && acceptedTrades.length === 0) {
     tradesList.innerHTML = '<p class="hint">No trade offers</p>';
   } else {
+    tradesList.innerHTML = ''; // Clear previous content
+    
     // Show pending trades
     if (pendingTrades.length > 0) {
       tradesList.innerHTML += '<h4>Pending Offers:</h4>';

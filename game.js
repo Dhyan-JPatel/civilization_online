@@ -1641,6 +1641,7 @@ async function assignMilitary(targetPlayerId, assignments) {
             if (card.lockedFor === targetPlayerId) {
               delete card.locked;
               delete card.lockedFor;
+              delete card.role;
             }
           }
         }
