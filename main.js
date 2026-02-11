@@ -7,6 +7,7 @@ import {
   joinGame,
   startGame,
   advancePhase,
+  advanceTurn,  // Advance to next player's turn
   buyCard,
   playCard,
   buyFarm,
@@ -29,6 +30,8 @@ import {
   getCurrentPlayerName,
   getIsHost,
   getMaxActions,  // Import helper to check action limits
+  isPlayerTurn,  // Check if it's a player's turn
+  getCurrentTurnPlayer,  // Get current turn player ID
   CREATOR_KEY
 } from './game.js';
 
@@ -103,6 +106,7 @@ function setupEventListeners() {
   document.getElementById('actionWar').addEventListener('click', showWarModal);
   document.getElementById('actionTrade').addEventListener('click', showTradeModal);
   document.getElementById('actionEconomicCollapse').addEventListener('click', showEconomicCollapseModal);
+  document.getElementById('actionEndTurn').addEventListener('click', handleEndTurn);
   document.getElementById('btnAdvancePhase').addEventListener('click', () => advancePhase());
   document.getElementById('leaveGameBtn2').addEventListener('click', handleLeaveGame);
   
@@ -212,6 +216,11 @@ async function handleLeaveGame() {
     await leaveGame();
     showWelcomeScreen();
   }
+}
+
+// Handle End Turn
+async function handleEndTurn() {
+  await advanceTurn();
 }
 
 // Handle Declare War
@@ -449,29 +458,63 @@ function updateGameUI(game) {
     handDisplay.appendChild(cardDiv);
   });
   
-  // Update action buttons based on phase and action limits
+  // Update action buttons based on phase, action limits, and turn order
   const isStateActionsPhase = game.phase === 'STATE_ACTIONS';
+  const isMyTurn = isPlayerTurn(game, playerId);
   const maxActions = getMaxActions(player);
   const actionsUsed = player.actions.actionsUsed || 0;
   const canTakeMoreActions = actionsUsed < maxActions;
   
-  document.getElementById('actionBuyCard').disabled = !isStateActionsPhase || !canTakeMoreActions || player.actions.boughtCard;
-  document.getElementById('actionBuyFarm').disabled = !isStateActionsPhase || !canTakeMoreActions || player.actions.boughtFarm;
-  document.getElementById('actionBuyLuxury').disabled = !isStateActionsPhase || !canTakeMoreActions || player.actions.boughtLuxury;
-  document.getElementById('actionReduceUnrest').disabled = !isStateActionsPhase || !canTakeMoreActions || player.actions.reducedUnrest;
-  document.getElementById('actionEmergencyCard').disabled = !isStateActionsPhase || !canTakeMoreActions || player.emergencyCardUsedThisRound || (player.emergencyCards || 0) <= 0;
-  document.getElementById('actionWar').disabled = !isStateActionsPhase || !canTakeMoreActions;
-  document.getElementById('actionTrade').disabled = !isStateActionsPhase || !canTakeMoreActions;
+  // Actions are only enabled if it's STATE_ACTIONS phase AND it's the player's turn
+  const canAct = isStateActionsPhase && isMyTurn && canTakeMoreActions;
   
-  // Show economic collapse button only if player has 0 economy cards during STATE_ACTIONS
+  document.getElementById('actionBuyCard').disabled = !canAct || player.actions.boughtCard;
+  document.getElementById('actionBuyFarm').disabled = !canAct || player.actions.boughtFarm;
+  document.getElementById('actionBuyLuxury').disabled = !canAct || player.actions.boughtLuxury;
+  document.getElementById('actionReduceUnrest').disabled = !canAct || player.actions.reducedUnrest;
+  document.getElementById('actionEmergencyCard').disabled = !canAct || player.emergencyCardUsedThisRound || (player.emergencyCards || 0) <= 0;
+  document.getElementById('actionWar').disabled = !canAct;
+  document.getElementById('actionTrade').disabled = !canAct;
+  
+  // Show economic collapse button only if player has 0 economy cards during STATE_ACTIONS and it's their turn
   const economyCards = player.hand.filter(c => c.type === 'economy');
   const hasEconomicCollapse = economyCards.length === 0;
   const collapseBtn = document.getElementById('actionEconomicCollapse');
-  if (hasEconomicCollapse && isStateActionsPhase) {
+  if (hasEconomicCollapse && isStateActionsPhase && isMyTurn) {
     collapseBtn.style.display = 'block';
     collapseBtn.disabled = false;
   } else {
     collapseBtn.style.display = 'none';
+  }
+  
+  // Show/enable End Turn button only during STATE_ACTIONS phase and when it's player's turn
+  const endTurnBtn = document.getElementById('actionEndTurn');
+  if (isStateActionsPhase && isMyTurn) {
+    endTurnBtn.style.display = 'block';
+    endTurnBtn.disabled = false;
+  } else {
+    endTurnBtn.style.display = 'none';
+  }
+  
+  // Update turn info
+  const turnInfo = document.getElementById('turnInfo');
+  if (isStateActionsPhase && game.turnOrder && game.turnOrder.length > 0) {
+    const currentTurnPlayerId = getCurrentTurnPlayer(game);
+    const currentTurnPlayer = game.players[currentTurnPlayerId];
+    
+    if (currentTurnPlayer) {
+      if (isMyTurn) {
+        turnInfo.textContent = '🎯 YOUR TURN - Take your actions';
+        turnInfo.style.color = '#4CAF50';
+      } else {
+        turnInfo.textContent = `⏳ Waiting for ${currentTurnPlayer.name}'s turn...`;
+        turnInfo.style.color = '#ff9800';
+      }
+    } else {
+      turnInfo.textContent = '';
+    }
+  } else {
+    turnInfo.textContent = '';
   }
   
   // Update action hint
@@ -526,24 +569,61 @@ function updateGameUI(game) {
     document.getElementById('gameHostControls').classList.remove('hidden');
   }
   
-  // Update other players list
+  // Update other players list with turn order indicators
   const otherPlayersList = document.getElementById('otherPlayersList');
   otherPlayersList.innerHTML = '';
   
-  Object.values(game.players).forEach(p => {
-    if (p.id === playerId) return;
+  // If there's a turn order, show players in that order
+  if (game.turnOrder && game.turnOrder.length > 0) {
+    const currentTurnPlayerId = getCurrentTurnPlayer(game);
     
-    const playerDiv = document.createElement('div');
-    playerDiv.className = 'player-item';
-    playerDiv.innerHTML = `
-      <div class="player-name">${p.name}${p.collapsed ? ' ⚠️ COLLAPSED' : ''}</div>
-      <div class="player-stats-mini">
-        <span>📊 ${p.stats.economy}E ${p.stats.military}M</span>
-        <span>🔥 ${p.stats.unrest}U</span>
-      </div>
-    `;
-    otherPlayersList.appendChild(playerDiv);
-  });
+    game.turnOrder.forEach((pid, index) => {
+      const p = game.players[pid];
+      if (!p) return;
+      
+      const isCurrentTurn = (pid === currentTurnPlayerId) && (game.phase === 'STATE_ACTIONS');
+      const isCurrentPlayer = (p.id === playerId);
+      
+      const playerDiv = document.createElement('div');
+      playerDiv.className = 'player-item';
+      
+      let turnIndicator = '';
+      if (isCurrentTurn) {
+        turnIndicator = '🎯 ';
+      }
+      
+      playerDiv.innerHTML = `
+        <div class="player-name">${turnIndicator}${isCurrentPlayer ? '(You) ' : ''}${p.name}${p.collapsed ? ' ⚠️ COLLAPSED' : ''}</div>
+        <div class="player-stats-mini">
+          <span>📊 ${p.stats.economy}E ${p.stats.military}M</span>
+          <span>🔥 ${p.stats.unrest}U</span>
+        </div>
+      `;
+      
+      if (isCurrentTurn && game.phase === 'STATE_ACTIONS') {
+        playerDiv.style.border = '2px solid #4CAF50';
+        playerDiv.style.backgroundColor = '#e8f5e9';
+      }
+      
+      otherPlayersList.appendChild(playerDiv);
+    });
+  } else {
+    // Fallback: show players without turn order
+    Object.values(game.players).forEach(p => {
+      if (p.id === playerId) return;
+      
+      const playerDiv = document.createElement('div');
+      playerDiv.className = 'player-item';
+      playerDiv.innerHTML = `
+        <div class="player-name">${p.name}${p.collapsed ? ' ⚠️ COLLAPSED' : ''}</div>
+        <div class="player-stats-mini">
+          <span>📊 ${p.stats.economy}E ${p.stats.military}M</span>
+          <span>🔥 ${p.stats.unrest}U</span>
+        </div>
+      `;
+      otherPlayersList.appendChild(playerDiv);
+    });
+  }
   
   // Check for victory
   if (game.gameOver) {
