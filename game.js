@@ -134,7 +134,8 @@ async function createGame(playerName, enableNaturalEvents = true) {
           boughtLuxury: false,
           reducedUnrest: false,
           declaredWar: false,
-          traded: false
+          traded: false,
+          actionsUsed: 0  // Track total actions used this round
         },
         wars: {},
         rebellion: null,
@@ -220,7 +221,8 @@ async function joinGame(gameCode, playerName) {
           boughtLuxury: false,
           reducedUnrest: false,
           declaredWar: false,
-          traded: false
+          traded: false,
+          actionsUsed: 0  // Track total actions used this round
         },
         wars: {},
         rebellion: null,
@@ -299,6 +301,16 @@ function calculateMorale(luxury, food) {
 function calculatePopulation(luxury, food, morale, military) {
   const moraleDivisor = Math.max(1, (morale / 10) + 1); // Ensure divisor is at least 1
   return Math.floor((luxury * Math.sqrt(food)) / moraleDivisor) + military;
+}
+
+// Calculate Maximum Allowed Actions (based on unrest level)
+function getMaxActions(unrest) {
+  // Rulebook: "You may take up to 2 State Actions, minus penalties"
+  // "30+ Unrest – Lose 1 State Action"
+  if (unrest >= 30) {
+    return 1; // Lost 1 action due to high unrest
+  }
+  return 2; // Normal max actions
 }
 
 // Perform Upkeep Phase
@@ -431,7 +443,8 @@ async function resetActions() {
         boughtLuxury: false,
         reducedUnrest: false,
         declaredWar: false,
-        traded: false
+        traded: false,
+        actionsUsed: 0  // Reset action counter each round
       };
       updates[`${playerId}/interferenceThisRound`] = {};
       updates[`${playerId}/lastLuxuryRoll`] = null; // Clear stale dice result
@@ -954,6 +967,12 @@ async function buyCard() {
       const player = game.players[currentPlayerId];
       if (!player) return game;
       
+      // Check action limit based on unrest
+      const maxActions = getMaxActions(player.stats.unrest);
+      if (player.actions.actionsUsed >= maxActions) {
+        throw new Error(`Cannot perform more actions this round (max ${maxActions} due to unrest)`);
+      }
+      
       if (player.actions.boughtCard) {
         throw new Error('Already bought a card this round');
       }
@@ -983,6 +1002,7 @@ async function buyCard() {
       const drawnCard = player.deck.shift();
       player.hand.push(drawnCard);
       player.actions.boughtCard = true;
+      player.actions.actionsUsed += 1; // Increment action counter
       
       // Economy will be recalculated automatically
       
@@ -1015,6 +1035,12 @@ async function buyFarm() {
       const player = game.players[currentPlayerId];
       if (!player) return game;
       
+      // Check action limit based on unrest
+      const maxActions = getMaxActions(player.stats.unrest);
+      if (player.actions.actionsUsed >= maxActions) {
+        throw new Error(`Cannot perform more actions this round (max ${maxActions} due to unrest)`);
+      }
+      
       if (player.actions.boughtFarm) {
         throw new Error('Already bought a farm this round');
       }
@@ -1025,6 +1051,7 @@ async function buyFarm() {
       
       player.stats.farms += 1;
       player.actions.boughtFarm = true;
+      player.actions.actionsUsed += 1; // Increment action counter
       
       return game;
     });
@@ -1057,6 +1084,12 @@ async function buyLuxury() {
       const player = game.players[currentPlayerId];
       if (!player) return game;
       
+      // Check action limit based on unrest
+      const maxActions = getMaxActions(player.stats.unrest);
+      if (player.actions.actionsUsed >= maxActions) {
+        throw new Error(`Cannot perform more actions this round (max ${maxActions} due to unrest)`);
+      }
+      
       if (player.actions.boughtLuxury) {
         throw new Error('Already bought luxury this round');
       }
@@ -1072,6 +1105,7 @@ async function buyLuxury() {
       player.stats.luxury += diceRoll;
       player.lastLuxuryRoll = diceRoll;
       player.actions.boughtLuxury = true;
+      player.actions.actionsUsed += 1; // Increment action counter
       
       return game;
     });
@@ -1145,12 +1179,19 @@ async function reduceUnrest() {
       const player = game.players[currentPlayerId];
       if (!player) return game;
       
+      // Check action limit based on unrest
+      const maxActions = getMaxActions(player.stats.unrest);
+      if (player.actions.actionsUsed >= maxActions) {
+        throw new Error(`Cannot perform more actions this round (max ${maxActions} due to unrest)`);
+      }
+      
       if (player.actions.reducedUnrest) {
         throw new Error('Already reduced unrest this round');
       }
       
       player.stats.unrest = Math.max(0, player.stats.unrest - 10);
       player.actions.reducedUnrest = true;
+      player.actions.actionsUsed += 1; // Increment action counter
       
       return game;
     });
@@ -1185,6 +1226,12 @@ async function declareWar(targetPlayerId) {
         throw new Error('Player not found');
       }
       
+      // Check action limit based on unrest
+      const maxActions = getMaxActions(player.stats.unrest);
+      if (player.actions.actionsUsed >= maxActions) {
+        throw new Error(`Cannot perform more actions this round (max ${maxActions} due to unrest)`);
+      }
+      
       if (player.actions.declaredWar) {
         throw new Error('Already declared war this round');
       }
@@ -1206,6 +1253,7 @@ async function declareWar(targetPlayerId) {
       };
       
       player.actions.declaredWar = true;
+      player.actions.actionsUsed += 1; // Increment action counter
       
       return game;
     });
@@ -1238,6 +1286,12 @@ async function sendTradeOffer(targetPlayerId, offer, request) {
       
       if (!player || !target) {
         throw new Error('Player not found');
+      }
+      
+      // Check action limit based on unrest
+      const maxActions = getMaxActions(player.stats.unrest);
+      if (player.actions.actionsUsed >= maxActions) {
+        throw new Error(`Cannot perform more actions this round (max ${maxActions} due to unrest)`);
       }
       
       if (player.actions.traded) {
@@ -1276,6 +1330,7 @@ async function sendTradeOffer(targetPlayerId, offer, request) {
       };
       
       player.actions.traded = true;
+      player.actions.actionsUsed += 1; // Increment action counter
       
       return game;
     });
@@ -1504,6 +1559,7 @@ export {
   listenToGameState,
   stopListeningToGameState,
   leaveGame,
+  getMaxActions,  // Export helper for UI to check action limits
   CREATOR_KEY
 };
 

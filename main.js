@@ -24,6 +24,7 @@ import {
   getCurrentPlayerId,
   getCurrentPlayerName,
   getIsHost,
+  getMaxActions,  // Import helper to check action limits
   CREATOR_KEY
 } from './game.js';
 
@@ -404,14 +405,18 @@ function updateGameUI(game) {
     handDisplay.appendChild(cardDiv);
   });
   
-  // Update action buttons based on phase
+  // Update action buttons based on phase and action limits
   const isStateActionsPhase = game.phase === 'STATE_ACTIONS';
-  document.getElementById('actionBuyCard').disabled = !isStateActionsPhase || player.actions.boughtCard;
-  document.getElementById('actionBuyFarm').disabled = !isStateActionsPhase || player.actions.boughtFarm;
-  document.getElementById('actionBuyLuxury').disabled = !isStateActionsPhase || player.actions.boughtLuxury;
-  document.getElementById('actionReduceUnrest').disabled = !isStateActionsPhase || player.actions.reducedUnrest;
-  document.getElementById('actionWar').disabled = !isStateActionsPhase;
-  document.getElementById('actionTrade').disabled = !isStateActionsPhase;
+  const maxActions = getMaxActions(player.stats.unrest);
+  const actionsUsed = player.actions.actionsUsed || 0;
+  const canTakeMoreActions = actionsUsed < maxActions;
+  
+  document.getElementById('actionBuyCard').disabled = !isStateActionsPhase || !canTakeMoreActions || player.actions.boughtCard;
+  document.getElementById('actionBuyFarm').disabled = !isStateActionsPhase || !canTakeMoreActions || player.actions.boughtFarm;
+  document.getElementById('actionBuyLuxury').disabled = !isStateActionsPhase || !canTakeMoreActions || player.actions.boughtLuxury;
+  document.getElementById('actionReduceUnrest').disabled = !isStateActionsPhase || !canTakeMoreActions || player.actions.reducedUnrest;
+  document.getElementById('actionWar').disabled = !isStateActionsPhase || !canTakeMoreActions;
+  document.getElementById('actionTrade').disabled = !isStateActionsPhase || !canTakeMoreActions;
   
   // Update action hint
   let hintText = '';
@@ -424,7 +429,13 @@ function updateGameUI(game) {
       hintText = '⚠️ INTERNAL_PRESSURE: Unrest increases are being applied';
       break;
     case 'STATE_ACTIONS':
-      hintText = '🎯 STATE_ACTIONS: Take your actions for this round!';
+      const maxActions = getMaxActions(player.stats.unrest);
+      const actionsUsed = player.actions.actionsUsed || 0;
+      const actionsRemaining = maxActions - actionsUsed;
+      hintText = `🎯 STATE_ACTIONS: Take your actions for this round! (${actionsRemaining}/${maxActions} actions remaining)`;
+      if (player.stats.unrest >= 30) {
+        hintText += ' ⚠️ High unrest limiting actions!';
+      }
       break;
     case 'WAR':
       hintText = '⚔️ WAR: Battles are being resolved automatically';
