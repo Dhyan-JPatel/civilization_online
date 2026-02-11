@@ -108,6 +108,8 @@ async function createGame(playerName, enableNaturalEvents = true) {
     naturalEventsEnabled: enableNaturalEvents,
     started: false,
     createdAt: Date.now(),
+    turnOrder: [playerId],  // Track player order for turn-based play
+    currentTurnIndex: 0,  // Index in turnOrder for current player's turn
     players: {
       [playerId]: {
         id: playerId,
@@ -240,6 +242,12 @@ async function joinGame(gameCode, playerName) {
         rebellion: null,
         collapsed: false
       };
+      
+      // Add player to turn order
+      if (!game.turnOrder) {
+        game.turnOrder = [];
+      }
+      game.turnOrder.push(playerId);
       
       return game;
     });
@@ -611,15 +619,17 @@ async function performInternalPressure() {
 async function resetActions() {
   if (!db || !currentGameCode) return;
 
-  const gameRef = ref(db, `games/${currentGameCode}/players`);
+  const gameRef = ref(db, `games/${currentGameCode}`);
   
   try {
     const snapshot = await get(gameRef);
-    const players = snapshot.val();
+    const game = snapshot.val();
+    
+    if (!game) return;
     
     const updates = {};
-    for (const playerId in players) {
-      updates[`${playerId}/actions`] = {
+    for (const playerId in game.players) {
+      updates[`players/${playerId}/actions`] = {
         boughtCard: false,
         boughtFarm: false,
         boughtLuxury: false,
@@ -628,15 +638,131 @@ async function resetActions() {
         traded: false,
         actionsUsed: 0  // Reset action counter each round
       };
-      updates[`${playerId}/emergencyCardUsedThisRound`] = false;  // Reset emergency card flag
-      updates[`${playerId}/interferenceThisRound`] = {};
-      updates[`${playerId}/lastLuxuryRoll`] = null; // Clear stale dice result
+      updates[`players/${playerId}/emergencyCardUsedThisRound`] = false;  // Reset emergency card flag
+      updates[`players/${playerId}/interferenceThisRound`] = {};
+      updates[`players/${playerId}/lastLuxuryRoll`] = null; // Clear stale dice result
     }
     
+    // Reset to first non-collapsed player's turn when STATE_ACTIONS phase begins
+    let startIndex = 0;
+    if (game.turnOrder && game.turnOrder.length > 0) {
+      // Find first non-collapsed player
+      for (let i = 0; i < game.turnOrder.length; i++) {
+        const playerId = game.turnOrder[i];
+        const player = game.players[playerId];
+        if (player && !player.collapsed) {
+          startIndex = i;
+          break;
+        }
+      }
+    }
+    updates.currentTurnIndex = startIndex;
+    
     await update(gameRef, updates);
-    console.log('✅ Actions reset');
+    
+    console.log('✅ Actions reset and turn set to first active player');
   } catch (error) {
     console.error('❌ Failed to reset actions:', error);
+  }
+}
+
+// Check if it's the current player's turn
+function isPlayerTurn(game, playerId) {
+  if (!game || !game.turnOrder || !playerId) {
+    return false;
+  }
+  
+  // During STATE_ACTIONS phase, only current turn player can act
+  if (game.phase === 'STATE_ACTIONS') {
+    // Get the current turn player (handling collapsed players)
+    const currentTurnPlayerId = getCurrentTurnPlayer(game);
+    return playerId === currentTurnPlayerId;
+  }
+  
+  // For other phases, no turn restriction (game logic handles actions)
+  return true;
+}
+
+// Validate turn and throw error if not player's turn
+function validatePlayerTurn(game, playerId) {
+  if (!isPlayerTurn(game, playerId)) {
+    const currentTurnPlayerId = getCurrentTurnPlayer(game);
+    const currentTurnPlayerName = game.players[currentTurnPlayerId]?.name || 'Unknown';
+    throw new Error(`Not your turn. It's ${currentTurnPlayerName}'s turn.`);
+  }
+}
+
+// Get the current turn player ID
+function getCurrentTurnPlayer(game) {
+  if (!game || !game.turnOrder || game.turnOrder.length === 0) {
+    return null;
+  }
+  
+  // Start from currentTurnIndex and find the next non-collapsed player
+  let attempts = 0;
+  let index = game.currentTurnIndex || 0;
+  
+  while (attempts < game.turnOrder.length) {
+    index = index % game.turnOrder.length;
+    const playerId = game.turnOrder[index];
+    const player = game.players[playerId];
+    
+    // Found an active (non-collapsed) player
+    if (player && !player.collapsed) {
+      return playerId;
+    }
+    
+    // Move to next player
+    index++;
+    attempts++;
+  }
+  
+  // All players are collapsed
+  return null;
+}
+
+// Advance to next player's turn
+async function advanceTurn() {
+  if (!db || !currentGameCode) return;
+
+  const gameRef = ref(db, `games/${currentGameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (game) => {
+      if (!game || game.phase !== 'STATE_ACTIONS') {
+        return game;
+      }
+      
+      if (!game.turnOrder || game.turnOrder.length === 0) {
+        return game;
+      }
+      
+      // Find next non-collapsed player
+      let nextIndex = (game.currentTurnIndex + 1) % game.turnOrder.length;
+      let attempts = 0;
+      
+      while (attempts < game.turnOrder.length) {
+        const playerId = game.turnOrder[nextIndex];
+        const player = game.players[playerId];
+        
+        // Found an active (non-collapsed) player
+        if (player && !player.collapsed) {
+          game.currentTurnIndex = nextIndex;
+          return game;
+        }
+        
+        // Move to next player
+        nextIndex = (nextIndex + 1) % game.turnOrder.length;
+        attempts++;
+      }
+      
+      // All players collapsed, no change
+      return game;
+    });
+    
+    console.log('✅ Advanced to next player\'s turn');
+  } catch (error) {
+    console.error('❌ Failed to advance turn:', error);
   }
 }
 
@@ -1175,6 +1301,9 @@ async function buyCard() {
         throw new Error('Can only buy cards during STATE_ACTIONS phase');
       }
       
+      // Turn validation
+      validatePlayerTurn(game, currentPlayerId);
+      
       const player = game.players[currentPlayerId];
       if (!player) return game;
       
@@ -1248,6 +1377,9 @@ async function buyFarm() {
         throw new Error('Can only buy farms during STATE_ACTIONS phase');
       }
       
+      // Turn validation
+      validatePlayerTurn(game, currentPlayerId);
+      
       const player = game.players[currentPlayerId];
       if (!player) return game;
       
@@ -1301,6 +1433,9 @@ async function buyLuxury() {
       if (game.phase !== 'STATE_ACTIONS') {
         throw new Error('Can only buy luxury during STATE_ACTIONS phase');
       }
+      
+      // Turn validation
+      validatePlayerTurn(game, currentPlayerId);
       
       const player = game.players[currentPlayerId];
       if (!player) return game;
@@ -1408,6 +1543,9 @@ async function reduceUnrest() {
       if (game.phase !== 'STATE_ACTIONS') {
         throw new Error('Can only reduce unrest during STATE_ACTIONS phase');
       }
+      
+      // Turn validation
+      validatePlayerTurn(game, currentPlayerId);
       
       const player = game.players[currentPlayerId];
       if (!player) return game;
@@ -1523,6 +1661,9 @@ async function declareWar(targetPlayerId) {
       if (game.phase !== 'STATE_ACTIONS') {
         throw new Error('Can only declare war during STATE_ACTIONS phase');
       }
+      
+      // Turn validation
+      validatePlayerTurn(game, currentPlayerId);
       
       const player = game.players[currentPlayerId];
       const target = game.players[targetPlayerId];
@@ -1701,6 +1842,9 @@ async function playEmergencyCard() {
         throw new Error('Can only play emergency cards during STATE_ACTIONS phase');
       }
       
+      // Turn validation
+      validatePlayerTurn(game, currentPlayerId);
+      
       const player = game.players[currentPlayerId];
       if (!player) return game;
       
@@ -1746,6 +1890,9 @@ async function sendTradeOffer(targetPlayerId, offer, request) {
       if (game.phase !== 'STATE_ACTIONS') {
         throw new Error('Can only send trade offers during STATE_ACTIONS phase');
       }
+      
+      // Turn validation
+      validatePlayerTurn(game, currentPlayerId);
       
       const player = game.players[currentPlayerId];
       const target = game.players[targetPlayerId];
@@ -2062,6 +2209,7 @@ export {
   joinGame,
   startGame,
   advancePhase,
+  advanceTurn,  // Advance to next player's turn
   buyCard,
   playCard,
   buyFarm,
@@ -2080,6 +2228,8 @@ export {
   stopListeningToGameState,
   leaveGame,
   getMaxActions,  // Export helper for UI to check action limits
+  isPlayerTurn,  // Check if it's a player's turn
+  getCurrentTurnPlayer,  // Get current turn player ID
   CREATOR_KEY
 };
 

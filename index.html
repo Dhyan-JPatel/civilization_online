@@ -146,8 +146,10 @@
           <button id="actionWar" class="action-btn">War Actions</button>
           <button id="actionTrade" class="action-btn">Trading</button>
           <button id="actionEconomicCollapse" class="action-btn" style="display: none; background-color: #f44336;">⚠️ Economic Collapse Recovery</button>
+          <button id="actionEndTurn" class="action-btn" style="display: none; background-color: #4CAF50;">✓ End Turn</button>
         </div>
         <p id="actionHint" class="hint">Actions available in STATE_ACTIONS phase</p>
+        <p id="turnInfo" class="hint" style="font-weight: bold; margin-top: 10px;"></p>
       </div>
 
       <!-- Host Controls -->
@@ -157,7 +159,7 @@
 
       <!-- Other Players -->
       <div class="section">
-        <h3>Other Players</h3>
+        <h3>Turn Order (🎯 indicates current turn)</h3>
         <div id="otherPlayersList" class="players-list"></div>
       </div>
 
