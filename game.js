@@ -619,15 +619,17 @@ async function performInternalPressure() {
 async function resetActions() {
   if (!db || !currentGameCode) return;
 
-  const gameRef = ref(db, `games/${currentGameCode}/players`);
+  const gameRef = ref(db, `games/${currentGameCode}`);
   
   try {
     const snapshot = await get(gameRef);
-    const players = snapshot.val();
+    const game = snapshot.val();
+    
+    if (!game) return;
     
     const updates = {};
-    for (const playerId in players) {
-      updates[`${playerId}/actions`] = {
+    for (const playerId in game.players) {
+      updates[`players/${playerId}/actions`] = {
         boughtCard: false,
         boughtFarm: false,
         boughtLuxury: false,
@@ -636,18 +638,29 @@ async function resetActions() {
         traded: false,
         actionsUsed: 0  // Reset action counter each round
       };
-      updates[`${playerId}/emergencyCardUsedThisRound`] = false;  // Reset emergency card flag
-      updates[`${playerId}/interferenceThisRound`] = {};
-      updates[`${playerId}/lastLuxuryRoll`] = null; // Clear stale dice result
+      updates[`players/${playerId}/emergencyCardUsedThisRound`] = false;  // Reset emergency card flag
+      updates[`players/${playerId}/interferenceThisRound`] = {};
+      updates[`players/${playerId}/lastLuxuryRoll`] = null; // Clear stale dice result
     }
+    
+    // Reset to first non-collapsed player's turn when STATE_ACTIONS phase begins
+    let startIndex = 0;
+    if (game.turnOrder && game.turnOrder.length > 0) {
+      // Find first non-collapsed player
+      for (let i = 0; i < game.turnOrder.length; i++) {
+        const playerId = game.turnOrder[i];
+        const player = game.players[playerId];
+        if (player && !player.collapsed) {
+          startIndex = i;
+          break;
+        }
+      }
+    }
+    updates.currentTurnIndex = startIndex;
     
     await update(gameRef, updates);
     
-    // Reset to first player's turn when STATE_ACTIONS phase begins
-    const gameStateRef = ref(db, `games/${currentGameCode}`);
-    await update(gameStateRef, { currentTurnIndex: 0 });
-    
-    console.log('✅ Actions reset and turn set to first player');
+    console.log('✅ Actions reset and turn set to first active player');
   } catch (error) {
     console.error('❌ Failed to reset actions:', error);
   }
@@ -661,20 +674,8 @@ function isPlayerTurn(game, playerId) {
   
   // During STATE_ACTIONS phase, only current turn player can act
   if (game.phase === 'STATE_ACTIONS') {
-    // Get active players (not collapsed)
-    const activeTurnOrder = game.turnOrder.filter(pid => {
-      const player = game.players[pid];
-      return player && !player.collapsed;
-    });
-    
-    if (activeTurnOrder.length === 0) {
-      return false;
-    }
-    
-    // Ensure currentTurnIndex is valid
-    const validIndex = game.currentTurnIndex % activeTurnOrder.length;
-    const currentTurnPlayerId = activeTurnOrder[validIndex];
-    
+    // Get the current turn player (handling collapsed players)
+    const currentTurnPlayerId = getCurrentTurnPlayer(game);
     return playerId === currentTurnPlayerId;
   }
   
@@ -684,23 +685,31 @@ function isPlayerTurn(game, playerId) {
 
 // Get the current turn player ID
 function getCurrentTurnPlayer(game) {
-  if (!game || !game.turnOrder) {
+  if (!game || !game.turnOrder || game.turnOrder.length === 0) {
     return null;
   }
   
-  // Get active players (not collapsed)
-  const activeTurnOrder = game.turnOrder.filter(pid => {
-    const player = game.players[pid];
-    return player && !player.collapsed;
-  });
+  // Start from currentTurnIndex and find the next non-collapsed player
+  let attempts = 0;
+  let index = game.currentTurnIndex || 0;
   
-  if (activeTurnOrder.length === 0) {
-    return null;
+  while (attempts < game.turnOrder.length) {
+    index = index % game.turnOrder.length;
+    const playerId = game.turnOrder[index];
+    const player = game.players[playerId];
+    
+    // Found an active (non-collapsed) player
+    if (player && !player.collapsed) {
+      return playerId;
+    }
+    
+    // Move to next player
+    index++;
+    attempts++;
   }
   
-  // Ensure currentTurnIndex is valid
-  const validIndex = game.currentTurnIndex % activeTurnOrder.length;
-  return activeTurnOrder[validIndex];
+  // All players are collapsed
+  return null;
 }
 
 // Advance to next player's turn
@@ -715,19 +724,30 @@ async function advanceTurn() {
         return game;
       }
       
-      // Get active players (not collapsed)
-      const activeTurnOrder = game.turnOrder.filter(pid => {
-        const player = game.players[pid];
-        return player && !player.collapsed;
-      });
-      
-      if (activeTurnOrder.length === 0) {
+      if (!game.turnOrder || game.turnOrder.length === 0) {
         return game;
       }
       
-      // Move to next player
-      game.currentTurnIndex = (game.currentTurnIndex + 1) % activeTurnOrder.length;
+      // Find next non-collapsed player
+      let nextIndex = (game.currentTurnIndex + 1) % game.turnOrder.length;
+      let attempts = 0;
       
+      while (attempts < game.turnOrder.length) {
+        const playerId = game.turnOrder[nextIndex];
+        const player = game.players[playerId];
+        
+        // Found an active (non-collapsed) player
+        if (player && !player.collapsed) {
+          game.currentTurnIndex = nextIndex;
+          return game;
+        }
+        
+        // Move to next player
+        nextIndex = (nextIndex + 1) % game.turnOrder.length;
+        attempts++;
+      }
+      
+      // All players collapsed, no change
       return game;
     });
     
