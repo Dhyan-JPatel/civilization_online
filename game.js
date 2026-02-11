@@ -128,6 +128,8 @@ async function createGame(playerName, enableNaturalEvents = true) {
         hand: hand,
         deck: remainingDeck,
         discardPile: [],
+        emergencyCards: 2,  // Each player starts with 2 emergency cards
+        emergencyCardUsedThisRound: false,  // Track if emergency card used this round
         actions: {
           boughtCard: false,
           boughtFarm: false,
@@ -215,6 +217,8 @@ async function joinGame(gameCode, playerName) {
         hand: hand,
         deck: remainingDeck,
         discardPile: [],
+        emergencyCards: 2,  // Each player starts with 2 emergency cards
+        emergencyCardUsedThisRound: false,  // Track if emergency card used this round
         actions: {
           boughtCard: false,
           boughtFarm: false,
@@ -446,6 +450,7 @@ async function resetActions() {
         traded: false,
         actionsUsed: 0  // Reset action counter each round
       };
+      updates[`${playerId}/emergencyCardUsedThisRound`] = false;  // Reset emergency card flag
       updates[`${playerId}/interferenceThisRound`] = {};
       updates[`${playerId}/lastLuxuryRoll`] = null; // Clear stale dice result
     }
@@ -626,6 +631,8 @@ async function performRebellion() {
         // Calculate government dice pool
         let govDice = 2; // Base
         govDice += Math.floor(player.stats.military / 20);
+        // Rulebook: "+1 if Emergency Card used"
+        if (player.emergencyCardUsedThisRound) govDice += 1;
         
         // Roll dice
         let rebelTotal = 0;
@@ -1266,6 +1273,55 @@ async function declareWar(targetPlayerId) {
   }
 }
 
+// Play Emergency Card
+async function playEmergencyCard() {
+  if (!db || !currentGameCode || !currentPlayerId) return;
+
+  const gameRef = ref(db, `games/${currentGameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (game) => {
+      if (!game) return game;
+      
+      // Phase validation - emergency cards can be played during STATE_ACTIONS phase
+      if (game.phase !== 'STATE_ACTIONS') {
+        throw new Error('Can only play emergency cards during STATE_ACTIONS phase');
+      }
+      
+      const player = game.players[currentPlayerId];
+      if (!player) return game;
+      
+      // Check action limit based on unrest
+      const maxActions = getMaxActions(player.stats.unrest);
+      if (player.actions.actionsUsed >= maxActions) {
+        throw new Error(`Cannot perform more actions this round (max ${maxActions} due to unrest)`);
+      }
+      
+      if (player.emergencyCards <= 0) {
+        throw new Error('No emergency cards remaining');
+      }
+      
+      if (player.emergencyCardUsedThisRound) {
+        throw new Error('Already used an emergency card this round');
+      }
+      
+      // Use emergency card - reduces unrest by 20
+      player.emergencyCards -= 1;
+      player.emergencyCardUsedThisRound = true;
+      player.stats.unrest = Math.max(0, player.stats.unrest - 20);
+      player.actions.actionsUsed += 1; // Increment action counter
+      
+      return game;
+    });
+    
+    console.log('✅ Emergency card played');
+    alert('✅ Emergency card used! -20 unrest\n(Will also grant +1 dice to government if rebellion occurs)');
+  } catch (error) {
+    console.error('❌ Failed to play emergency card:', error);
+    alert('❌ ' + error.message);
+  }
+}
+
 // Send Trade Offer
 async function sendTradeOffer(targetPlayerId, offer, request) {
   if (!db || !currentGameCode || !currentPlayerId) return;
@@ -1552,6 +1608,7 @@ export {
   buyLuxury,
   reduceUnrest,
   declareWar,
+  playEmergencyCard,  // Play emergency cards
   sendTradeOffer,
   acceptTradeOffer,
   rejectTradeOffer,

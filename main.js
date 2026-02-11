@@ -13,6 +13,7 @@ import {
   buyLuxury,
   reduceUnrest,
   declareWar,
+  playEmergencyCard,  // Play emergency cards
   sendTradeOffer,
   acceptTradeOffer,
   rejectTradeOffer,
@@ -95,6 +96,7 @@ function setupEventListeners() {
   document.getElementById('actionBuyFarm').addEventListener('click', () => buyFarm());
   document.getElementById('actionBuyLuxury').addEventListener('click', () => buyLuxury());
   document.getElementById('actionReduceUnrest').addEventListener('click', () => reduceUnrest());
+  document.getElementById('actionEmergencyCard').addEventListener('click', () => playEmergencyCard());
   document.getElementById('actionWar').addEventListener('click', showWarModal);
   document.getElementById('actionTrade').addEventListener('click', showTradeModal);
   document.getElementById('btnAdvancePhase').addEventListener('click', () => advancePhase());
@@ -376,6 +378,7 @@ function updateGameUI(game) {
   document.getElementById('statMorale').textContent = player.stats.morale;
   document.getElementById('statPopulation').textContent = player.stats.population;
   document.getElementById('statFarms').textContent = player.stats.farms;
+  document.getElementById('statEmergencyCards').textContent = player.emergencyCards || 0;
   
   // Update hand display
   const handDisplay = document.getElementById('handDisplay');
@@ -415,6 +418,7 @@ function updateGameUI(game) {
   document.getElementById('actionBuyFarm').disabled = !isStateActionsPhase || !canTakeMoreActions || player.actions.boughtFarm;
   document.getElementById('actionBuyLuxury').disabled = !isStateActionsPhase || !canTakeMoreActions || player.actions.boughtLuxury;
   document.getElementById('actionReduceUnrest').disabled = !isStateActionsPhase || !canTakeMoreActions || player.actions.reducedUnrest;
+  document.getElementById('actionEmergencyCard').disabled = !isStateActionsPhase || !canTakeMoreActions || player.emergencyCardUsedThisRound || (player.emergencyCards || 0) <= 0;
   document.getElementById('actionWar').disabled = !isStateActionsPhase || !canTakeMoreActions;
   document.getElementById('actionTrade').disabled = !isStateActionsPhase || !canTakeMoreActions;
   
