@@ -1385,6 +1385,11 @@ async function playCard(cardIndex) {
       
       const card = player.hand[cardIndex];
       
+      // Check if card is locked (assigned to a war)
+      if (card.locked) {
+        throw new Error(`Cannot discard this card - it is locked for war (${card.role} for ${card.lockedFor})`);
+      }
+      
       // Initialize discard pile if it doesn't exist
       if (!player.discardPile) {
         player.discardPile = [];

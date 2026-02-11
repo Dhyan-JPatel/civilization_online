@@ -410,9 +410,21 @@ function updateGameUI(game) {
   player.hand.forEach((card, index) => {
     const cardDiv = document.createElement('div');
     cardDiv.className = `card card-${card.type}`;
+    
+    // Add visual indicator for locked cards
+    if (card.locked) {
+      cardDiv.classList.add('card-locked');
+      cardDiv.title = `🔒 Locked (${card.role} for war)`;
+    }
+    
     cardDiv.textContent = `${card.value}${card.suit}`;
     
-    if (isCleanupPhase) {
+    // Add lock emoji to locked cards
+    if (card.locked) {
+      cardDiv.textContent += ' 🔒';
+    }
+    
+    if (isCleanupPhase && !card.locked) {
       cardDiv.style.cursor = 'pointer';
       cardDiv.title = 'Click to discard this card';
       cardDiv.addEventListener('click', () => {
@@ -420,6 +432,9 @@ function updateGameUI(game) {
           playCard(index);
         }
       });
+    } else if (card.locked) {
+      cardDiv.style.cursor = 'not-allowed';
+      cardDiv.title = `🔒 Locked (${card.role} for war) - Cannot discard`;
     } else {
       cardDiv.style.cursor = 'default';
       cardDiv.title = 'Cards can only be discarded during CLEANUP phase';
@@ -692,6 +707,12 @@ window.rejectTrade = (tradeId) => {
   rejectTradeOffer(tradeId);
 };
 
+window.breakTrade = (tradeId) => {
+  if (confirm('⚠️ Breaking this trade will give you +10 unrest penalty. Are you sure?')) {
+    breakTrade(tradeId);
+  }
+};
+
 // Helper function to format resources for display
 function formatResources(resources) {
   const parts = [];
@@ -729,21 +750,48 @@ function updateTradeModal() {
     trade => trade.toId === playerId && trade.status === 'pending'
   );
   
-  if (pendingTrades.length === 0) {
+  const acceptedTrades = Object.values(currentGame.tradeOffers || {}).filter(
+    trade => (trade.toId === playerId || trade.fromId === playerId) && trade.status === 'accepted'
+  );
+  
+  if (pendingTrades.length === 0 && acceptedTrades.length === 0) {
     tradesList.innerHTML = '<p class="hint">No trade offers</p>';
   } else {
-    pendingTrades.forEach(trade => {
-      const tradeDiv = document.createElement('div');
-      tradeDiv.className = 'trade-offer';
-      tradeDiv.innerHTML = `
-        <p><strong>From ${trade.fromName}:</strong></p>
-        <p>Offers: ${formatResources(trade.offer)}</p>
-        <p>Requests: ${formatResources(trade.request)}</p>
-        <button class="btn btn-success" onclick="window.acceptTrade('${trade.id}')">Accept</button>
-        <button class="btn btn-danger" onclick="window.rejectTrade('${trade.id}')">Reject</button>
-      `;
-      tradesList.appendChild(tradeDiv);
-    });
+    // Show pending trades
+    if (pendingTrades.length > 0) {
+      tradesList.innerHTML += '<h4>Pending Offers:</h4>';
+      pendingTrades.forEach(trade => {
+        const tradeDiv = document.createElement('div');
+        tradeDiv.className = 'trade-offer';
+        tradeDiv.innerHTML = `
+          <p><strong>From ${trade.fromName}:</strong></p>
+          <p>Offers: ${formatResources(trade.offer)}</p>
+          <p>Requests: ${formatResources(trade.request)}</p>
+          <button class="btn btn-success" onclick="window.acceptTrade('${trade.id}')">Accept</button>
+          <button class="btn btn-danger" onclick="window.rejectTrade('${trade.id}')">Reject</button>
+        `;
+        tradesList.appendChild(tradeDiv);
+      });
+    }
+    
+    // Show accepted trades with break option
+    if (acceptedTrades.length > 0) {
+      tradesList.innerHTML += '<h4 style="margin-top: 20px;">Active Deals:</h4>';
+      acceptedTrades.forEach(trade => {
+        const tradeDiv = document.createElement('div');
+        tradeDiv.className = 'trade-offer';
+        const isInitiator = trade.fromId === playerId;
+        tradeDiv.innerHTML = `
+          <p><strong>${isInitiator ? 'To' : 'From'} ${isInitiator ? trade.toName : trade.fromName}:</strong></p>
+          <p>You give: ${formatResources(isInitiator ? trade.offer : trade.request)}</p>
+          <p>You get: ${formatResources(isInitiator ? trade.request : trade.offer)}</p>
+          <button class="btn btn-danger" onclick="window.breakTrade('${trade.id}')" style="background-color: #f44336;">
+            ⚠️ Break Deal (+10 Unrest Penalty)
+          </button>
+        `;
+        tradesList.appendChild(tradeDiv);
+      });
+    }
   }
 }
 
