@@ -205,9 +205,12 @@ civilization_online/
 ├── test.html               # Automated test page
 ├── package.json            # Dependency documentation
 ├── civilization_game_manual.txt  # Complete game rules
+├── README.md               # This file
+├── GAMEPLAY_GUIDE.md       # Complete gameplay instructions
 ├── DEPLOYMENT.md           # Setup and deployment guide
-├── LICENSE                 # Apache 2.0 License
-└── README.md               # This file
+├── TESTING_GUIDE.md        # Comprehensive testing procedures
+├── ARCHIVE.md              # Historical development documentation
+└── LICENSE                 # Apache 2.0 License
 ```
 
 ## Security
@@ -241,6 +244,13 @@ To play:
 5. Manage your civilization to avoid collapse and achieve victory
 
 See [civilization_game_manual.txt](civilization_game_manual.txt) for complete game rules.
+
+## Documentation
+
+- **[GAMEPLAY_GUIDE.md](GAMEPLAY_GUIDE.md)** - Complete gameplay instructions
+- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Setup and deployment guide
+- **[TESTING_GUIDE.md](TESTING_GUIDE.md)** - Comprehensive testing procedures
+- **[ARCHIVE.md](ARCHIVE.md)** - Historical development documentation and project milestones
 
 ## License
 
