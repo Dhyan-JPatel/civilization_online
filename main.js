@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Check if Firebase config is available
   if (!window.__FIREBASE_CONFIG__) {
     console.error('❌ Firebase configuration not found');
-    alert('❌ Firebase configuration is missing.\n\nThe app cannot work without Firebase.\nPlease check DEPLOYMENT.md for setup instructions.');
+    alert('❌ Firebase configuration is missing. The app cannot work without Firebase. Please check DEPLOYMENT.md for setup instructions.');
     document.body.innerHTML = '<div style="padding: 20px; text-align: center;"><h1>Configuration Error</h1><p>Firebase configuration is missing. Please check the console and DEPLOYMENT.md for instructions.</p></div>';
     return;
   }
@@ -61,7 +61,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Initialize Firebase
   const success = initFirebase();
   if (!success) {
-    alert('❌ Failed to initialize Firebase.\n\nPlease check your configuration in firebase-config-loader.js or the browser console for details.');
+    alert('❌ Failed to initialize Firebase. Please check your configuration in firebase-config-loader.js or the browser console for details.');
     return;
   }
   
@@ -189,7 +189,9 @@ async function handleCreateGame() {
       
       showLobbyScreen();
     } else {
-      alert('❌ Failed to create game. Please check console for details.');
+      // createGame returns null when Firebase is not initialized or game creation fails
+      console.error('❌ Create game returned null - likely Firebase initialization failure or database error');
+      alert('❌ Failed to create game. Please ensure Firebase is properly configured. Check the browser console for details.');
     }
   } catch (error) {
     console.error('❌ Error in handleCreateGame:', error);

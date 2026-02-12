@@ -45,9 +45,9 @@
         );
         
         if (hasPlaceholders) {
-            console.error('⚠️ Firebase configuration contains placeholder values. The application will not work until you configure it with your actual Firebase project settings.');
-            console.error('See DEPLOYMENT.md for instructions on how to configure Firebase.');
-            alert('⚠️ Firebase configuration error: Placeholder values detected.\n\nPlease see DEPLOYMENT.md for setup instructions.');
+            console.warn('⚠️ Firebase configuration contains placeholder values. The application will not work until you configure it with your actual Firebase project settings.');
+            console.warn('See DEPLOYMENT.md for instructions on how to configure Firebase.');
+            alert('⚠️ Firebase configuration error: Placeholder values detected. Please see DEPLOYMENT.md for setup instructions.');
         }
     }
 })();
