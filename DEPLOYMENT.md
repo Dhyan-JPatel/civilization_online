@@ -150,7 +150,7 @@ Then open `index.dev.html` in your browser.
 
 The current creator key for creating games is: **BeforeRoboticsGame**
 
-This can be changed in `main.js` by modifying the `CREATOR_KEY` constant.
+This can be changed in `game.js` by modifying the `CREATOR_KEY` constant (line 9).
 
 ## Testing
 

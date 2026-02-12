@@ -50,10 +50,18 @@ let currentGame = null;
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('🎮 Civilization Online starting...');
   
+  // Check if Firebase config is available
+  if (!window.__FIREBASE_CONFIG__) {
+    console.error('❌ Firebase configuration not found');
+    alert('❌ Firebase configuration is missing. The app cannot work without Firebase. Please check DEPLOYMENT.md for setup instructions.');
+    document.body.innerHTML = '<div style="padding: 20px; text-align: center;"><h1>Configuration Error</h1><p>Firebase configuration is missing. Please check the console and DEPLOYMENT.md for instructions.</p></div>';
+    return;
+  }
+  
   // Initialize Firebase
   const success = initFirebase();
   if (!success) {
-    alert('Failed to initialize Firebase. Please check your configuration.');
+    alert('❌ Failed to initialize Firebase. Please check your configuration in firebase-config-loader.js or the browser console for details.');
     return;
   }
   
@@ -153,7 +161,7 @@ async function handleCreateGame() {
   const naturalEvents = document.getElementById('naturalEventsToggle').checked;
   
   if (creatorKey !== CREATOR_KEY) {
-    alert('❌ Invalid creator key');
+    alert(`❌ Invalid creator key. Expected: "${CREATOR_KEY}"`);
     return;
   }
   
@@ -162,23 +170,32 @@ async function handleCreateGame() {
     return;
   }
   
-  const result = await createGame(playerName, naturalEvents);
-  
-  if (result) {
-    // Start listening to game state
-    listenToGameState(result.gameCode, (game) => {
-      currentGame = game;
-      
-      if (game.started) {
-        showGameScreen();
-        updateGameUI(game);
-      } else {
-        showLobbyScreen();
-        updateLobbyUI(game);
-      }
-    });
+  try {
+    const result = await createGame(playerName, naturalEvents);
     
-    showLobbyScreen();
+    if (result) {
+      // Start listening to game state
+      listenToGameState(result.gameCode, (game) => {
+        currentGame = game;
+        
+        if (game.started) {
+          showGameScreen();
+          updateGameUI(game);
+        } else {
+          showLobbyScreen();
+          updateLobbyUI(game);
+        }
+      });
+      
+      showLobbyScreen();
+    } else {
+      // createGame returns null when Firebase is not initialized or game creation fails
+      console.error('❌ Create game returned null - likely Firebase initialization failure or database error');
+      alert('❌ Failed to create game. Please ensure Firebase is properly configured. Check the browser console for details.');
+    }
+  } catch (error) {
+    console.error('❌ Error in handleCreateGame:', error);
+    alert('❌ Failed to create game: ' + error.message);
   }
 }
 
