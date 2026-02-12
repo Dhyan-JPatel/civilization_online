@@ -1,11 +1,11 @@
 # Testing Guide for Civilization Online
 
-This guide provides comprehensive testing steps to ensure all game features work correctly.
+This guide provides comprehensive testing steps to ensure all game features work correctly, including the new single-player mode with AI bots.
 
 ## Prerequisites
 
 1. Set up Firebase Realtime Database
-2. Configure `index.dev.html` with your Firebase credentials (see DEPLOYMENT.md)
+2. Configure `firebase-config-loader.js` with your Firebase credentials (see DEPLOYMENT.md)
 3. Open the application in a web browser (preferably Safari for iOS, Chrome for Android)
 
 ## Quick Start Testing
@@ -16,27 +16,103 @@ This guide provides comprehensive testing steps to ensure all game features work
    - Open the application
    - Enter creator key: `BeforeRoboticsGame`
    - Enter your name
+   - **Select game mode**: Single Player or Multiplayer
+   - **Set bot count**: 0-8 (test with different values)
+   - **Choose bot difficulty**: Easy, Medium, or Hard
    - Toggle "Enable Natural Events" (test both on and off)
    - Click "Create Game"
    - ✅ Verify: Game code is displayed (5 characters)
    - ✅ Verify: You are shown in the players list with "Host" badge
+   - ✅ Verify: Bot players appear with 🤖 icon (if bots configured)
 
-2. **Join Game** (use second browser/tab)
+2. **Join Game** (use second browser/tab for multiplayer testing)
    - Open the application in a new tab/window
    - Enter the game code from step 1
    - Enter a different name
    - Click "Join Game"
    - ✅ Verify: You appear in the lobby
-   - ✅ Verify: Both players are visible in both tabs
+   - ✅ Verify: All players (humans and bots) are visible in both tabs
 
 3. **Start Game** (as host)
    - Click "Start Game"
    - Confirm the dialog
+   - ✅ Verify: Bots are added to the game if configured
    - ✅ Verify: Game screen appears
    - ✅ Verify: Phase shows "UPKEEP"
    - ✅ Verify: Round shows "1"
    - ✅ Verify: Your hand shows 4 cards
    - ✅ Verify: Stats are visible (Economy, Military, etc.)
+   - ✅ Verify: Bot players shown in turn order with 🤖 icon
+
+## Bot-Specific Testing (15-20 minutes)
+
+### Single Player Mode
+
+1. **Create Single Player Game with Easy Bots**
+   - Select "Single Player" mode
+   - Set bot count to 3
+   - Choose "Easy" difficulty
+   - Start the game
+   - ✅ Verify: 3 bots are added (Emperor Augustus, Queen Cleopatra, King Hammurabi)
+   - ✅ Verify: Bots marked with 🤖 icon
+   - ✅ Verify: Bots appear in turn order
+
+2. **Bot Turn Execution**
+   - Advance to STATE_ACTIONS phase (as host, click "Advance Phase" twice)
+   - Wait for the first player's turn
+   - ✅ Verify: If it's a bot's turn, bot automatically takes actions
+   - ✅ Verify: Bot actions appear in console (🤖 Bot X bought a card, etc.)
+   - ✅ Verify: 🎯 indicator shows current turn player
+   - ✅ Verify: Bot stats update after actions (economy/military changes)
+   - ✅ Verify: Turn automatically advances after bot completes actions
+
+3. **Bot Behavior by Difficulty**
+   - **Easy bots**: More random actions, may make suboptimal choices
+   - **Medium bots**: Balanced strategy, considers 2 turns ahead
+   - **Hard bots**: Aggressive, optimal play, declares war more often
+   - ✅ Verify: Bot action patterns differ by difficulty
+   - ✅ Verify: Hard bots manage unrest better than easy bots
+   - ✅ Verify: Hard bots build economy/farms more efficiently
+
+4. **Bot Actions Validation**
+   - Watch bots play for several rounds
+   - ✅ Verify: Bots buy cards when economy allows
+   - ✅ Verify: Bots buy farms (visible in stats)
+   - ✅ Verify: Bots buy luxury (visible in stats)
+   - ✅ Verify: Bots reduce unrest when it gets high
+   - ✅ Verify: Bots declare war when militarily strong
+   - ✅ Verify: Bots play emergency cards during economic collapse
+   - ✅ Verify: Bots respect action limits (max 2 actions, or 1 if high unrest)
+
+### Multiplayer with Bots
+
+1. **Create Multiplayer Game with Bots**
+   - Select "Multiplayer" mode
+   - Set bot count to 2
+   - Choose "Medium" difficulty
+   - Start the game
+   - ✅ Verify: 2 bots added to game
+   - ✅ Verify: Mix of human and bot players in turn order
+   - ✅ Verify: Turn order alternates between humans and bots
+
+2. **Mixed Gameplay**
+   - Play through several rounds with human and bot players
+   - ✅ Verify: Human players can take their turns normally
+   - ✅ Verify: Bot players automatically take their turns
+   - ✅ Verify: Turn advances correctly between humans and bots
+   - ✅ Verify: Humans can declare war on bots
+   - ✅ Verify: Bots can declare war on humans
+   - ✅ Verify: Bots can declare war on other bots
+
+### Player Cap Testing
+
+1. **Test Expanded Player Cap**
+   - Create game with 8 bots
+   - Try to join with multiple human players
+   - ✅ Verify: Total players can exceed 6 (old limit)
+   - ✅ Verify: Maximum 30 players enforced
+   - ✅ Verify: Maximum 8 bots enforced
+   - ✅ Verify: Clear error message when limits reached
 
 ## Comprehensive Testing (30-45 minutes)
 
@@ -48,6 +124,7 @@ This guide provides comprehensive testing steps to ensure all game features work
    - ✅ Verify: Food = 0 (no farms yet)
    - ✅ Verify: Morale = 0
    - ✅ Verify: Population = Military value
+   - ✅ Verify: All players (including bots) stats calculated correctly
    - ✅ Verify: Unrest = 0
 
 2. **Advance to Next Phase** (host only)

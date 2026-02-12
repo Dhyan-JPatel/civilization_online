@@ -5,9 +5,16 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
 import { getDatabase, ref, set, get, update, onValue, runTransaction, push, remove, onDisconnect } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
 
+// Import bot AI
+import { decideBotAction, decideTrade, decideCardPlay } from './bot-ai.js';
+
 // Constants
 const CREATOR_KEY = 'BeforeRoboticsGame';
 const PHASES = ['UPKEEP', 'INTERNAL_PRESSURE', 'STATE_ACTIONS', 'WAR', 'REBELLION', 'NATURAL_EVENTS', 'CLEANUP'];
+const MAX_PLAYERS = 30;  // Maximum total players (humans + bots)
+const MAX_BOTS = 8;  // Maximum number of bots allowed
+const BOT_INITIAL_DELAY_MS = 1500;  // Delay before bot starts their turn
+const BOT_ACTION_DELAY_MS = 1000;  // Delay between bot actions
 
 // Global state
 let app;
@@ -16,6 +23,7 @@ let currentGameCode = null;
 let currentPlayerId = null;
 let currentPlayerName = null;
 let isHost = false;
+let botTurnTimeout = null;  // Timeout for bot turns
 let gameStateListener = null;
 
 // Initialize Firebase
@@ -87,7 +95,7 @@ function createDeck() {
 }
 
 // Create Game
-async function createGame(playerName, enableNaturalEvents = true) {
+async function createGame(playerName, enableNaturalEvents = true, botCount = 0, botDifficulty = 'medium', gameMode = 'multiplayer') {
   if (!db) {
     alert('Firebase not initialized');
     return null;
@@ -110,11 +118,17 @@ async function createGame(playerName, enableNaturalEvents = true) {
     createdAt: Date.now(),
     turnOrder: [playerId],  // Track player order for turn-based play
     currentTurnIndex: 0,  // Index in turnOrder for current player's turn
+    gameMode: gameMode,  // 'singleplayer' or 'multiplayer'
+    botConfig: {
+      count: Math.min(Math.max(0, botCount), MAX_BOTS),  // Defensive: clamp 0-8 range (UI also validates)
+      difficulty: botDifficulty  // 'easy', 'medium', 'hard'
+    },
     players: {
       [playerId]: {
         id: playerId,
         name: playerName,
         isHost: true,
+        isBot: false,
         online: true,
         lastSeen: Date.now(),
         stats: {
@@ -166,7 +180,7 @@ async function createGame(playerName, enableNaturalEvents = true) {
     localStorage.setItem('currentPlayerId', playerId);
     localStorage.setItem('currentPlayerName', playerName);
     
-    console.log(`✅ Game created: ${gameCode}`);
+    console.log(`✅ Game created: ${gameCode} (Mode: ${gameMode}, Bots: ${botCount})`);
     return { gameCode, playerId, playerName };
   } catch (error) {
     console.error('❌ Failed to create game:', error);
@@ -195,8 +209,8 @@ async function joinGame(gameCode, playerName) {
       }
       
       const playerCount = Object.keys(game.players || {}).length;
-      if (playerCount >= 6) {
-        throw new Error('Game is full (max 6 players)');
+      if (playerCount >= MAX_PLAYERS) {
+        throw new Error(`Game is full (max ${MAX_PLAYERS} players)`);
       }
       
       const playerId = generatePlayerId();
@@ -208,6 +222,7 @@ async function joinGame(gameCode, playerName) {
         id: playerId,
         name: playerName,
         isHost: false,
+        isBot: false,  // Human player
         online: true,
         lastSeen: Date.now(),
         stats: {
@@ -279,6 +294,94 @@ async function joinGame(gameCode, playerName) {
   }
 }
 
+// Add Bot Players to Game
+async function addBotPlayers(gameCode, count, difficulty) {
+  if (!db) {
+    console.error('Firebase not initialized');
+    return;
+  }
+  
+  const botNames = [
+    'Emperor Augustus', 'Queen Cleopatra', 'King Hammurabi', 'Empress Wu',
+    'Sultan Suleiman', 'Pharaoh Ramses', 'Czar Peter', 'Kaiser Wilhelm'
+  ];
+  
+  const gameRef = ref(db, `games/${gameCode}`);
+  
+  try {
+    for (let i = 0; i < count; i++) {
+      await runTransaction(gameRef, (game) => {
+        if (!game) {
+          throw new Error('Game not found');
+        }
+        
+        const playerCount = Object.keys(game.players || {}).length;
+        if (playerCount >= MAX_PLAYERS) {
+          console.warn('Cannot add more bots - game is full');
+          return game;  // Don't add more bots
+        }
+        
+        // Include loop index in ID for uniqueness
+        const botId = 'bot_' + Date.now() + '_' + i + '_' + Math.random().toString(36).slice(2, 11);
+        const botName = botNames[i % botNames.length];
+        const deck = createDeck();
+        const hand = deck.slice(0, 4);
+        const remainingDeck = deck.slice(4);
+        
+        game.players[botId] = {
+          id: botId,
+          name: botName,
+          isHost: false,
+          isBot: true,
+          botDifficulty: difficulty,
+          online: true,
+          lastSeen: Date.now(),
+          stats: {
+            unrest: 0,
+            economy: 0,
+            military: 0,
+            food: 0,
+            luxury: 0,
+            morale: 0,
+            population: 0,
+            farms: 1
+          },
+          hand: hand,
+          deck: remainingDeck,
+          discardPile: [],
+          emergencyCards: 2,
+          emergencyCardUsedThisRound: false,
+          actions: {
+            boughtCard: false,
+            boughtFarm: false,
+            boughtLuxury: false,
+            reducedUnrest: false,
+            declaredWar: false,
+            traded: false,
+            actionsUsed: 0
+          },
+          wars: {},
+          militaryAssignments: {},
+          rebellion: null,
+          collapsed: false
+        };
+        
+        // Add bot to turn order
+        if (!game.turnOrder) {
+          game.turnOrder = [];
+        }
+        game.turnOrder.push(botId);
+        
+        return game;
+      });
+    }
+    
+    console.log(`✅ Added ${count} bot players (difficulty: ${difficulty})`);
+  } catch (error) {
+    console.error('❌ Failed to add bot players:', error);
+  }
+}
+
 // Start Game
 async function startGame() {
   if (!db || !currentGameCode || !isHost) return;
@@ -286,6 +389,15 @@ async function startGame() {
   const gameRef = ref(db, `games/${currentGameCode}`);
   
   try {
+    // First, get the game data to check if we need to add bots
+    const gameSnapshot = await get(gameRef);
+    const game = gameSnapshot.val();
+    
+    if (game && game.botConfig && game.botConfig.count > 0) {
+      // Add bot players before starting the game
+      await addBotPlayers(currentGameCode, game.botConfig.count, game.botConfig.difficulty);
+    }
+    
     await update(gameRef, {
       started: true,
       phase: 'UPKEEP',
@@ -795,6 +907,174 @@ async function advanceTurn() {
     console.error('❌ Failed to advance turn:', error);
     alert('❌ ' + error.message);
   }
+}
+
+/**
+ * Execute bot turn during STATE_ACTIONS phase
+ * This is called automatically when it's a bot's turn
+ */
+async function executeBotTurn(gameCode, botId) {
+  if (!db) return;
+  
+  console.log(`🤖 Bot ${botId} is taking their turn...`);
+  
+  const gameRef = ref(db, `games/${gameCode}`);
+  
+  try {
+    // Fetch current game state
+    const snapshot = await get(gameRef);
+    const game = snapshot.val();
+    
+    if (!game || game.phase !== 'STATE_ACTIONS') {
+      console.log('❌ Not in STATE_ACTIONS phase, skipping bot turn');
+      return;
+    }
+    
+    const bot = game.players[botId];
+    if (!bot || !bot.isBot || bot.collapsed) {
+      console.log('❌ Invalid bot or bot collapsed');
+      return;
+    }
+    
+    // Check if it's actually the bot's turn
+    if (!isPlayerTurn(game, botId)) {
+      console.log('❌ Not bot\'s turn');
+      return;
+    }
+    
+    // Decide action
+    const action = decideBotAction(game, botId);
+    
+    if (!action) {
+      console.log('⚠️ Bot decided not to take any action');
+      await advanceBotTurn(gameCode, botId);
+      return;
+    }
+    
+    console.log(`🤖 Bot action: ${action.type}`);
+    
+    // Execute the action
+    switch (action.type) {
+      case 'buyCard':
+        await buyCardForBot(gameCode, botId);
+        break;
+      case 'buyFarm':
+        await buyFarmForBot(gameCode, botId);
+        break;
+      case 'buyLuxury':
+        await buyLuxuryForBot(gameCode, botId);
+        break;
+      case 'reduceUnrest':
+        await reduceUnrestForBot(gameCode, botId);
+        break;
+      case 'declareWar':
+        if (action.targetId) {
+          await declareWarForBot(gameCode, botId, action.targetId);
+        }
+        break;
+      case 'playEmergencyCard':
+        await playEmergencyCardForBot(gameCode, botId);
+        break;
+      case 'endTurn':
+        await advanceBotTurn(gameCode, botId);
+        return;
+      default:
+        console.log(`⚠️ Unknown bot action: ${action.type}`);
+        await advanceBotTurn(gameCode, botId);
+        return;
+    }
+    
+    // After executing action, check if bot can take more actions
+    // Wait a bit, then check again
+    setTimeout(async () => {
+      const newSnapshot = await get(gameRef);
+      const newGame = newSnapshot.val();
+      
+      if (newGame && newGame.phase === 'STATE_ACTIONS' && isPlayerTurn(newGame, botId)) {
+        const newBot = newGame.players[botId];
+        const maxActions = getMaxActions(newBot);
+        
+        if (newBot.actions.actionsUsed < maxActions) {
+          // Bot can take another action
+          await executeBotTurn(gameCode, botId);
+        } else {
+          // Bot is done, advance turn
+          await advanceBotTurn(gameCode, botId);
+        }
+      }
+    }, BOT_ACTION_DELAY_MS);  // Delay between bot actions
+    
+  } catch (error) {
+    console.error('❌ Failed to execute bot turn:', error);
+    // Try to advance turn anyway
+    await advanceBotTurn(gameCode, botId);
+  }
+}
+
+/**
+ * Advance turn for a bot (similar to advanceTurn but for bots)
+ */
+async function advanceBotTurn(gameCode, botId) {
+  if (!db) return;
+  
+  const gameRef = ref(db, `games/${gameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (game) => {
+      if (!game || game.phase !== 'STATE_ACTIONS') return game;
+      
+      if (!game.turnOrder || game.turnOrder.length === 0) return game;
+      
+      // Validate it's this bot's turn
+      if (!isPlayerTurn(game, botId)) return game;
+      
+      // Find next non-collapsed player
+      let nextIndex = (game.currentTurnIndex + 1) % game.turnOrder.length;
+      let attempts = 0;
+      
+      while (attempts < game.turnOrder.length) {
+        const playerId = game.turnOrder[nextIndex];
+        const player = game.players[playerId];
+        
+        if (player && !player.collapsed) {
+          game.currentTurnIndex = nextIndex;
+          return game;
+        }
+        
+        nextIndex = (nextIndex + 1) % game.turnOrder.length;
+        attempts++;
+      }
+      
+      return game;
+    });
+    
+    console.log('✅ Bot turn advanced');
+  } catch (error) {
+    console.error('❌ Failed to advance bot turn:', error);
+  }
+}
+
+/**
+ * Check if current turn player is a bot, and if so, execute their turn
+ */
+async function checkAndExecuteBotTurn(game) {
+  if (!game || game.phase !== 'STATE_ACTIONS') return;
+  
+  const currentTurnPlayerId = getCurrentTurnPlayer(game);
+  if (!currentTurnPlayerId) return;
+  
+  const currentPlayer = game.players[currentTurnPlayerId];
+  if (!currentPlayer || !currentPlayer.isBot || currentPlayer.collapsed) return;
+  
+  // Clear any existing timeout
+  if (botTurnTimeout) {
+    clearTimeout(botTurnTimeout);
+  }
+  
+  // Schedule bot turn with a small delay for realism
+  botTurnTimeout = setTimeout(() => {
+    executeBotTurn(game.code, currentTurnPlayerId);
+  }, BOT_INITIAL_DELAY_MS);  // Initial delay before bot starts turn
 }
 
 // Perform War Phase
@@ -2252,14 +2532,261 @@ async function leaveGame() {
   }
 }
 
+// ============= Bot Action Functions =============
+// These are simplified versions of the human actions for bots
+
+async function buyCardForBot(gameCode, botId) {
+  if (!db) return;
+  
+  const gameRef = ref(db, `games/${gameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (game) => {
+      if (!game || game.phase !== 'STATE_ACTIONS') return game;
+      
+      const bot = game.players[botId];
+      if (!bot || !bot.isBot || bot.collapsed) return game;
+      
+      if (!isPlayerTurn(game, botId)) return game;
+      if (bot.actions.boughtCard) return game;
+      if (bot.stats.economy < 2) return game;
+      if (bot.hand.length >= 10) return game;
+      
+      // Handle deck/discard
+      if (bot.deck.length === 0) {
+        if (bot.discardPile.length === 0) return game;
+        bot.deck = [...bot.discardPile];
+        bot.discardPile = [];
+        for (let i = bot.deck.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [bot.deck[i], bot.deck[j]] = [bot.deck[j], bot.deck[i]];
+        }
+      }
+      
+      consumeEconomy(bot, 2);
+      const drawnCard = bot.deck.shift();
+      bot.hand.push(drawnCard);
+      bot.actions.boughtCard = true;
+      bot.actions.actionsUsed += 1;
+      
+      bot.stats.economy = calculateEconomy(bot.hand);
+      bot.stats.military = calculateMilitary(bot.hand);
+      
+      return game;
+    });
+    
+    console.log(`✅ Bot ${botId} bought a card`);
+  } catch (error) {
+    console.error('❌ Bot failed to buy card:', error);
+  }
+}
+
+async function buyFarmForBot(gameCode, botId) {
+  if (!db) return;
+  
+  const gameRef = ref(db, `games/${gameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (game) => {
+      if (!game || game.phase !== 'STATE_ACTIONS') return game;
+      
+      const bot = game.players[botId];
+      if (!bot || !bot.isBot || bot.collapsed) return game;
+      
+      if (!isPlayerTurn(game, botId)) return game;
+      if (bot.actions.boughtFarm) return game;
+      if (bot.stats.economy < 5) return game;
+      
+      consumeEconomy(bot, 5);
+      bot.stats.farms += 1;
+      bot.actions.boughtFarm = true;
+      bot.actions.actionsUsed += 1;
+      
+      bot.stats.economy = calculateEconomy(bot.hand);
+      bot.stats.military = calculateMilitary(bot.hand);
+      
+      return game;
+    });
+    
+    console.log(`✅ Bot ${botId} bought a farm`);
+  } catch (error) {
+    console.error('❌ Bot failed to buy farm:', error);
+  }
+}
+
+async function buyLuxuryForBot(gameCode, botId) {
+  if (!db) return;
+  
+  const gameRef = ref(db, `games/${gameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (game) => {
+      if (!game || game.phase !== 'STATE_ACTIONS') return game;
+      
+      const bot = game.players[botId];
+      if (!bot || !bot.isBot || bot.collapsed) return game;
+      
+      if (!isPlayerTurn(game, botId)) return game;
+      if (bot.actions.boughtLuxury) return game;
+      if (bot.stats.economy < 1) return game;
+      
+      consumeEconomy(bot, 1);
+      
+      // Dice roll for luxury (same as human)
+      const diceRoll = Math.floor(Math.random() * 6) + 1;
+      const luxuryGained = diceRoll >= 4 ? 1 : 0;
+      
+      bot.stats.luxury += luxuryGained;
+      bot.actions.boughtLuxury = true;
+      bot.actions.actionsUsed += 1;
+      
+      bot.stats.economy = calculateEconomy(bot.hand);
+      bot.stats.military = calculateMilitary(bot.hand);
+      
+      return game;
+    });
+    
+    console.log(`✅ Bot ${botId} bought luxury`);
+  } catch (error) {
+    console.error('❌ Bot failed to buy luxury:', error);
+  }
+}
+
+async function reduceUnrestForBot(gameCode, botId) {
+  if (!db) return;
+  
+  const gameRef = ref(db, `games/${gameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (game) => {
+      if (!game || game.phase !== 'STATE_ACTIONS') return game;
+      
+      const bot = game.players[botId];
+      if (!bot || !bot.isBot || bot.collapsed) return game;
+      
+      if (!isPlayerTurn(game, botId)) return game;
+      if (bot.actions.reducedUnrest) return game;
+      if (bot.stats.economy < 1) return game;
+      if (bot.stats.unrest <= 0) return game;
+      
+      consumeEconomy(bot, 1);
+      bot.stats.unrest = Math.max(0, bot.stats.unrest - 10);
+      bot.actions.reducedUnrest = true;
+      bot.actions.actionsUsed += 1;
+      
+      bot.stats.economy = calculateEconomy(bot.hand);
+      bot.stats.military = calculateMilitary(bot.hand);
+      
+      return game;
+    });
+    
+    console.log(`✅ Bot ${botId} reduced unrest`);
+  } catch (error) {
+    console.error('❌ Bot failed to reduce unrest:', error);
+  }
+}
+
+async function declareWarForBot(gameCode, botId, targetId) {
+  if (!db) return;
+  
+  const gameRef = ref(db, `games/${gameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (game) => {
+      if (!game || game.phase !== 'STATE_ACTIONS') return game;
+      
+      const bot = game.players[botId];
+      const target = game.players[targetId];
+      
+      if (!bot || !bot.isBot || bot.collapsed) return game;
+      if (!target || target.collapsed) return game;
+      
+      if (!isPlayerTurn(game, botId)) return game;
+      if (bot.actions.declaredWar) return game;
+      
+      // Check if already at war
+      if (bot.wars && bot.wars[targetId]) return game;
+      
+      // Initialize wars if needed
+      if (!bot.wars) bot.wars = {};
+      if (!target.wars) target.wars = {};
+      
+      bot.wars[targetId] = {
+        track: 0,
+        stage: 'none',
+        lastBattle: null
+      };
+      
+      target.wars[botId] = {
+        track: 0,
+        stage: 'none',
+        lastBattle: null
+      };
+      
+      bot.actions.declaredWar = true;
+      bot.actions.actionsUsed += 1;
+      bot.stats.unrest = Math.min(100, bot.stats.unrest + 1);
+      target.stats.unrest = Math.min(100, target.stats.unrest + 3);
+      
+      return game;
+    });
+    
+    console.log(`✅ Bot ${botId} declared war on ${targetId}`);
+  } catch (error) {
+    console.error('❌ Bot failed to declare war:', error);
+  }
+}
+
+async function playEmergencyCardForBot(gameCode, botId) {
+  if (!db) return;
+  
+  const gameRef = ref(db, `games/${gameCode}`);
+  
+  try {
+    await runTransaction(gameRef, (game) => {
+      if (!game || game.phase !== 'STATE_ACTIONS') return game;
+      
+      const bot = game.players[botId];
+      if (!bot || !bot.isBot || bot.collapsed) return game;
+      
+      if (!isPlayerTurn(game, botId)) return game;
+      if (bot.emergencyCards <= 0) return game;
+      if (bot.emergencyCardUsedThisRound) return game;
+      
+      bot.emergencyCards -= 1;
+      bot.emergencyCardUsedThisRound = true;
+      
+      // Draw a card for economy boost (simple version - always red for bots)
+      const drawnCard = {
+        suit: '♥',
+        value: '5',
+        numValue: 5,
+        type: 'economy',
+        id: 'emergency_' + Date.now()
+      };
+      
+      bot.hand.push(drawnCard);
+      bot.stats.economy = calculateEconomy(bot.hand);
+      
+      return game;
+    });
+    
+    console.log(`✅ Bot ${botId} played emergency card`);
+  } catch (error) {
+    console.error('❌ Bot failed to play emergency card:', error);
+  }
+}
+
 // Export functions and getters
 export {
   initFirebase,
   createGame,
   joinGame,
+  addBotPlayers,  // Add bot players to game
   startGame,
   advancePhase,
   advanceTurn,  // Advance to next player's turn
+  checkAndExecuteBotTurn,  // Check and execute bot turn
   buyCard,
   playCard,
   buyFarm,
@@ -2281,7 +2808,9 @@ export {
   isPlayerTurn,  // Check if it's a player's turn
   getCurrentTurnPlayer,  // Get current turn player ID
   fetchCurrentGameState,  // Fetch current game state from Firebase
-  CREATOR_KEY
+  CREATOR_KEY,
+  MAX_PLAYERS,  // Export max players constant
+  MAX_BOTS  // Export max bots constant
 };
 
 // Export getter functions for dynamic state

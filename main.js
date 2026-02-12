@@ -8,6 +8,7 @@ import {
   startGame,
   advancePhase,
   advanceTurn,  // Advance to next player's turn
+  checkAndExecuteBotTurn,  // Check and execute bot turn
   buyCard,
   playCard,
   buyFarm,
@@ -81,6 +82,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (game.started) {
           showGameScreen();
           updateGameUI(game);
+          // Check if it's a bot's turn and execute
+          checkAndExecuteBotTurn(game);
         } else {
           showLobbyScreen();
           updateLobbyUI(game);
@@ -159,6 +162,9 @@ async function handleCreateGame() {
   const creatorKey = document.getElementById('creatorKey').value.trim();
   const playerName = document.getElementById('createPlayerName').value.trim();
   const naturalEvents = document.getElementById('naturalEventsToggle').checked;
+  const gameMode = document.querySelector('input[name="gameMode"]:checked').value;
+  const botCount = parseInt(document.getElementById('botCount').value) || 0;
+  const botDifficulty = document.getElementById('botDifficulty').value;
   
   if (creatorKey !== CREATOR_KEY) {
     alert(`❌ Invalid creator key. Expected: "${CREATOR_KEY}"`);
@@ -170,8 +176,13 @@ async function handleCreateGame() {
     return;
   }
   
+  if (botCount < 0 || botCount > 8) {
+    alert('❌ Bot count must be between 0 and 8');
+    return;
+  }
+  
   try {
-    const result = await createGame(playerName, naturalEvents);
+    const result = await createGame(playerName, naturalEvents, botCount, botDifficulty, gameMode);
     
     if (result) {
       // Start listening to game state
@@ -181,6 +192,8 @@ async function handleCreateGame() {
         if (game.started) {
           showGameScreen();
           updateGameUI(game);
+          // Check if it's a bot's turn and execute
+          checkAndExecuteBotTurn(game);
         } else {
           showLobbyScreen();
           updateLobbyUI(game);
@@ -224,6 +237,8 @@ async function handleJoinGame() {
       if (game.started) {
         showGameScreen();
         updateGameUI(game);
+        // Check if it's a bot's turn and execute
+        checkAndExecuteBotTurn(game);
       } else {
         showLobbyScreen();
         updateLobbyUI(game);
@@ -409,9 +424,12 @@ function updateLobbyUI(game) {
   Object.values(game.players).forEach(player => {
     const playerDiv = document.createElement('div');
     playerDiv.className = 'player-item';
+    const botIcon = player.isBot ? ' 🤖' : '';
+    const hostIcon = player.isHost ? ' 👑' : '';
+    const statusIcon = player.isBot ? '🟢' : (player.online ? '🟢' : '⚪');
     playerDiv.innerHTML = `
-      <span class="player-name">${player.name}${player.isHost ? ' 👑' : ''}</span>
-      <span class="player-status">${player.online ? '🟢' : '⚪'}</span>
+      <span class="player-name">${escapeHtml(player.name)}${hostIcon}${botIcon}</span>
+      <span class="player-status">${statusIcon}</span>
     `;
     playersList.appendChild(playerDiv);
   });
@@ -634,8 +652,10 @@ function updateGameUI(game) {
         turnIndicator = '🎯 ';
       }
       
+      const botIcon = p.isBot ? ' 🤖' : '';
+      
       playerDiv.innerHTML = `
-        <div class="player-name">${turnIndicator}${isCurrentPlayer ? '(You) ' : ''}${escapeHtml(p.name)}${p.collapsed ? ' ⚠️ COLLAPSED' : ''}</div>
+        <div class="player-name">${turnIndicator}${isCurrentPlayer ? '(You) ' : ''}${escapeHtml(p.name)}${botIcon}${p.collapsed ? ' ⚠️ COLLAPSED' : ''}</div>
         <div class="player-stats-mini">
           <span>📊 ${p.stats.economy}E ${p.stats.military}M</span>
           <span>🔥 ${p.stats.unrest}U</span>
@@ -656,8 +676,9 @@ function updateGameUI(game) {
       
       const playerDiv = document.createElement('div');
       playerDiv.className = 'player-item';
+      const botIcon = p.isBot ? ' 🤖' : '';
       playerDiv.innerHTML = `
-        <div class="player-name">${escapeHtml(p.name)}${p.collapsed ? ' ⚠️ COLLAPSED' : ''}</div>
+        <div class="player-name">${escapeHtml(p.name)}${botIcon}${p.collapsed ? ' ⚠️ COLLAPSED' : ''}</div>
         <div class="player-stats-mini">
           <span>📊 ${p.stats.economy}E ${p.stats.military}M</span>
           <span>🔥 ${p.stats.unrest}U</span>

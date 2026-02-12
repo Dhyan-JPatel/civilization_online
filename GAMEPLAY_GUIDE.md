@@ -2,13 +2,16 @@
 
 ## Overview
 
-Civilization Online is a fully functional multiplayer strategy game where you build and manage your civilization while competing with other players. Victory requires balancing expansion, military strength, and internal stability.
+Civilization Online is a fully functional multiplayer strategy game where you build and manage your civilization while competing with other players or AI bots. Victory requires balancing expansion, military strength, and internal stability.
 
 ## Game Setup
 
 1. **Creating a Game**: 
    - Host enters the creator key
    - Enters their display name
+   - **Chooses game mode**: Single Player (vs AI) or Multiplayer (with friends)
+   - **Sets bot count**: 0-8 AI opponents
+   - **Selects bot difficulty**: Easy, Medium, or Hard
    - Optionally enables natural events
    - Receives a unique 5-character game code
    
@@ -16,10 +19,58 @@ Civilization Online is a fully functional multiplayer strategy game where you bu
    - Players enter the game code
    - Enter their display name
    - Wait in lobby for host to start
+   - Bot players (marked with 🤖) are automatically added when the game starts
 
 3. **Starting the Game**:
    - Host clicks "Start Game" when all players are ready
-   - Each player starts with 4 cards and 1 farm
+   - Bots are automatically added to the game if configured
+   - Each player (human and bot) starts with 4 cards and 1 farm
+
+## AI Bot Behavior
+
+### Difficulty Levels
+
+**Easy Difficulty** 🟢
+- 40% random decision-making
+- Considers 1 turn ahead
+- Higher risk tolerance
+- Less aggressive (30% war likelihood)
+- Basic economic focus
+
+**Medium Difficulty** 🟡
+- 20% random decision-making
+- Considers 2 turns ahead
+- Moderate risk tolerance
+- Balanced aggression (50% war likelihood)
+- Good economic focus
+
+**Hard Difficulty** 🔴
+- 5% random decision-making (optimal play)
+- Considers 3 turns ahead
+- Low risk tolerance (optimal choices)
+- Very aggressive (70% war likelihood)
+- Strong economic focus
+- Early unrest management
+
+### Bot Strategy
+
+Bots use heuristic-based decision-making that evaluates:
+- **Survival priorities**: Managing unrest to avoid rebellion
+- **Economic growth**: Building farms, buying cards, generating economy
+- **Military development**: Building military strength for wars
+- **Risk assessment**: Evaluating war opportunities based on military ratios
+- **Resource management**: Balancing food, luxury, and morale
+
+Bots will:
+- ✅ Buy cards when economy allows and hand isn't full
+- ✅ Buy farms for long-term food production
+- ✅ Buy luxury to increase morale and population
+- ✅ Reduce unrest when it reaches threshold levels
+- ✅ Declare war on weaker opponents when militarily advantaged
+- ✅ Play emergency cards during economic collapse
+- ✅ Make strategic decisions based on game state scoring
+
+Bots automatically take their turns during the STATE_ACTIONS phase with a small delay between actions for realism.
 
 ## 7-Phase Turn Structure
 
