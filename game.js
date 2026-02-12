@@ -727,18 +727,32 @@ async function advanceTurn() {
 
   const gameRef = ref(db, `games/${currentGameCode}`);
   
+  let validationError = null;
+  
   try {
-    await runTransaction(gameRef, (game) => {
-      if (!game || game.phase !== 'STATE_ACTIONS') {
-        throw new Error('Can only end turn during STATE_ACTIONS phase');
+    const result = await runTransaction(gameRef, (game) => {
+      if (!game) {
+        return game; // Abort transaction
+      }
+      
+      // Perform validations
+      if (game.phase !== 'STATE_ACTIONS') {
+        validationError = 'Can only end turn during STATE_ACTIONS phase';
+        return; // Abort transaction
       }
       
       if (!game.turnOrder || game.turnOrder.length === 0) {
-        throw new Error('No turn order established');
+        validationError = 'No turn order established';
+        return; // Abort transaction
       }
       
       // Validate it's this player's turn
-      validatePlayerTurn(game, currentPlayerId);
+      if (!isPlayerTurn(game, currentPlayerId)) {
+        const currentTurnPlayerId = getCurrentTurnPlayer(game);
+        const currentTurnPlayerName = game.players[currentTurnPlayerId]?.name || 'Unknown';
+        validationError = `Not your turn. It's ${currentTurnPlayerName}'s turn.`;
+        return; // Abort transaction
+      }
       
       // Find next non-collapsed player
       let nextIndex = (game.currentTurnIndex + 1) % game.turnOrder.length;
@@ -759,12 +773,21 @@ async function advanceTurn() {
         attempts++;
       }
       
-      // All players collapsed, no change
-      throw new Error('All players have collapsed');
+      // All players collapsed - no change possible
+      validationError = 'All players have collapsed';
+      return; // Abort transaction
     });
     
-    console.log('✅ Advanced to next player\'s turn');
-    alert('✅ Turn ended! Next player\'s turn.');
+    // Check if transaction was aborted due to validation error
+    if (validationError) {
+      throw new Error(validationError);
+    }
+    
+    // Success - transaction committed
+    if (result.committed) {
+      console.log('✅ Advanced to next player\'s turn');
+      alert('✅ Turn ended! Next player\'s turn.');
+    }
   } catch (error) {
     console.error('❌ Failed to advance turn:', error);
     alert('❌ ' + error.message);
