@@ -1,6 +1,6 @@
 # Civilization Online
 
-Online multiplayer strategy game to play with friends. Build your empire without letting it collapse under its own weight!
+Online multiplayer strategy game to play with friends or against AI bots. Build your empire without letting it collapse under its own weight!
 
 ## About
 
@@ -12,6 +12,9 @@ Civilization is a strategy card-and-dice game about building a powerful empire w
 
 All game phases are now implemented with complete logic:
 - ✅ Create and join games with unique game codes
+- ✅ **Single-player and multiplayer modes** with AI bots
+- ✅ **AI bot opponents** with 3 difficulty levels (Easy/Medium/Hard)
+- ✅ **Expanded player cap** to 30 total players (humans + bots)
 - ✅ Real-time player synchronization
 - ✅ Mobile-friendly UI for iPhone/iPad
 - ✅ Reconnection support via localStorage
@@ -28,6 +31,13 @@ All game phases are now implemented with complete logic:
 - ✅ Zero security vulnerabilities (CodeQL verified)
 
 **New in this update:**
+- **Single-player mode with AI bots** - Play against intelligent computer opponents
+- **Heuristic-based AI** with strategic decision-making (economy, unrest, war timing)
+- **3 difficulty levels** - Easy (casual), Medium (balanced), Hard (aggressive/optimal)
+- **Configurable bot count** - Add 0-8 bots to any game
+- **Expanded player cap** - Support for up to 30 total players (humans + bots)
+- **Bots work in multiplayer** - Mix human and AI players in the same game
+- **Intelligent bot behavior** - Bots evaluate game state, score actions, and make strategic decisions
 - Complete WAR phase with battle resolution and casualty system
 - Complete REBELLION phase with dice-based combat
 - Complete NATURAL_EVENTS phase with 4 event types
@@ -38,7 +48,17 @@ All game phases are now implemented with complete logic:
 ## Features
 
 ### Complete Game Implementation
+- **Game Modes**: Choose between Single Player (vs AI) or Multiplayer (with friends)
+- **AI Bot System**: 
+  - Add 0-8 AI opponents to any game
+  - Three difficulty levels with different strategic behaviors
+  - Easy: Casual play, 40% random decisions, basic strategies
+  - Medium: Balanced strategy, 20% randomness, considers 2 turns ahead
+  - Hard: Aggressive optimal play, 5% randomness, considers 3 turns ahead
+  - Bots make intelligent decisions based on game state scoring
+  - Strategic priorities: economy growth, unrest control, avoiding collapse, war timing
 - **Lobby System**: Create and join games with unique 5-character codes
+- **Expanded Capacity**: Support for up to 30 total players (humans + bots), with bot max of 8
 - **7-Phase Turn Structure**: 
   - UPKEEP: Automatic food production, morale, and population calculations
   - INTERNAL_PRESSURE: Food stress, siege pressure, economic collapse, foreign interference
@@ -112,10 +132,13 @@ All game phases are now implemented with complete logic:
   - Automatic winner determination
   
 - **Real-time Multiplayer**:
-  - Up to 6 players per game
+  - Up to 30 players per game (humans + bots combined)
+  - Maximum 8 bots per game
+  - Mix human and AI players in the same game
   - Real-time updates via Firebase
   - Auto-reconnection after page reload
   - Mobile-optimized UI with touch targets
+  - Bot players marked with 🤖 icon in UI
   
 - **Enhanced UI/UX**:
   - **Interactive card system** - Click cards to play/discard with confirmation dialogs
@@ -152,9 +175,16 @@ All game phases are now implemented with complete logic:
 See [GAMEPLAY_GUIDE.md](GAMEPLAY_GUIDE.md) for complete gameplay instructions including:
 - All 7 game phases explained
 - Player actions and strategies
+- AI bot behavior and difficulty levels
 - Victory conditions
 - Trading and diplomacy
 - War and rebellion mechanics
+
+**Quick Play Guide:**
+1. Choose **Single Player** mode to play against AI bots, or **Multiplayer** to play with friends
+2. Set the number of bots (0-8) and difficulty level (Easy/Medium/Hard)
+3. Create a game with the creator key or join an existing game
+4. Start playing! Bots will automatically take their turns in STATE_ACTIONS phase
 
 ### For Developers
 
@@ -200,6 +230,8 @@ Quick start:
 civilization_online/
 ├── index.html              # Main HTML (no secrets)
 ├── main.js                 # Application logic with modular Firebase
+├── game.js                 # Core game logic and Firebase interactions
+├── bot-ai.js               # AI bot decision engine with heuristic-based strategies
 ├── style.css               # Responsive mobile-first styles
 ├── firebase-config-loader.js  # Runtime configuration loader
 ├── test.html               # Automated test page
