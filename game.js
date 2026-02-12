@@ -2302,7 +2302,7 @@ export function getIsHost() {
 }
 
 // Fetch current game state from Firebase
-export async function fetchCurrentGameState() {
+async function fetchCurrentGameState() {
   if (!db || !currentGameCode) return null;
   
   try {
