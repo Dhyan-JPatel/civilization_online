@@ -770,7 +770,9 @@ async function resetActions() {
       }
     }
     updates.currentTurnIndex = startIndex;
-    updates.turnsTakenThisPhase = [];  // Reset turns tracking for new STATE_ACTIONS phase
+    // Reset turns tracking for new STATE_ACTIONS phase
+    // This ensures players can take turns again in the new STATE_ACTIONS phase
+    updates.turnsTakenThisPhase = [];
     
     await update(gameRef, updates);
     
@@ -867,8 +869,11 @@ async function checkAndAdvancePhaseIfComplete(gameCode) {
       console.log('✅ All players have completed their turns in STATE_ACTIONS phase. Advancing to next phase...');
       
       // Only host should advance the phase to avoid race conditions
+      // In single-player mode, the creator is always the host
       if (isHost) {
         await advancePhase();
+      } else {
+        console.log('⚠️ Waiting for host to advance phase...');
       }
     }
   } catch (error) {
@@ -1136,6 +1141,11 @@ async function checkAndExecuteBotTurn(game) {
   const turnsTaken = game.turnsTakenThisPhase || [];
   if (turnsTaken.includes(currentTurnPlayerId)) {
     console.log('⚠️ Bot has already taken turn this phase, skipping to prevent loop');
+    console.log('   Current phase:', game.phase);
+    console.log('   Turn order:', game.turnOrder);
+    console.log('   Current turn index:', game.currentTurnIndex);
+    console.log('   Bot ID:', currentTurnPlayerId);
+    console.log('   Turns taken this phase:', turnsTaken);
     return;
   }
   
