@@ -723,19 +723,22 @@ function getCurrentTurnPlayer(game) {
 
 // Advance to next player's turn
 async function advanceTurn() {
-  if (!db || !currentGameCode) return;
+  if (!db || !currentGameCode || !currentPlayerId) return;
 
   const gameRef = ref(db, `games/${currentGameCode}`);
   
   try {
     await runTransaction(gameRef, (game) => {
       if (!game || game.phase !== 'STATE_ACTIONS') {
-        return game;
+        throw new Error('Can only end turn during STATE_ACTIONS phase');
       }
       
       if (!game.turnOrder || game.turnOrder.length === 0) {
-        return game;
+        throw new Error('No turn order established');
       }
+      
+      // Validate it's this player's turn
+      validatePlayerTurn(game, currentPlayerId);
       
       // Find next non-collapsed player
       let nextIndex = (game.currentTurnIndex + 1) % game.turnOrder.length;
@@ -757,12 +760,14 @@ async function advanceTurn() {
       }
       
       // All players collapsed, no change
-      return game;
+      throw new Error('All players have collapsed');
     });
     
     console.log('✅ Advanced to next player\'s turn');
+    alert('✅ Turn ended! Next player\'s turn.');
   } catch (error) {
     console.error('❌ Failed to advance turn:', error);
+    alert('❌ ' + error.message);
   }
 }
 
