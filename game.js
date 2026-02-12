@@ -1380,7 +1380,9 @@ async function buyCard() {
       // Consume economy cards worth 2 economy
       consumeEconomy(player, 2);
       
-      // Economy will be recalculated automatically from remaining cards
+      // Recalculate economy and military from remaining cards
+      player.stats.economy = calculateEconomy(player.hand);
+      player.stats.military = calculateMilitary(player.hand);
       
       return game;
     });
@@ -1436,6 +1438,10 @@ async function buyFarm() {
       
       // Consume economy cards worth 5 economy
       consumeEconomy(player, 5);
+      
+      // Recalculate economy and military from remaining cards
+      player.stats.economy = calculateEconomy(player.hand);
+      player.stats.military = calculateMilitary(player.hand);
       
       return game;
     });
@@ -1498,6 +1504,10 @@ async function buyLuxury() {
       
       // Consume economy cards worth 1 economy
       consumeEconomy(player, 1);
+      
+      // Recalculate economy and military from remaining cards
+      player.stats.economy = calculateEconomy(player.hand);
+      player.stats.military = calculateMilitary(player.hand);
       
       return game;
     });
@@ -1618,8 +1628,14 @@ async function handleEconomicCollapse(drawCard = true) {
         throw new Error('Can only handle economic collapse during STATE_ACTIONS phase');
       }
       
+      // Turn validation
+      validatePlayerTurn(game, currentPlayerId);
+      
       const player = game.players[currentPlayerId];
       if (!player) return game;
+      
+      // Check action limit based on unrest
+      validateActionLimit(player);
       
       // Check if player has 0 economy cards
       const economyCards = player.hand.filter(card => card.type === 'economy');
@@ -1667,6 +1683,9 @@ async function handleEconomicCollapse(drawCard = true) {
         player.stats.unrest += 20;
         alert('⚠️ Accepted +20 unrest to stabilize economy');
       }
+      
+      // Increment action counter
+      player.actions.actionsUsed += 1;
       
       return game;
     });
