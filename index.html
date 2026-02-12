@@ -27,6 +27,34 @@
         <input type="password" id="creatorKey" placeholder="Creator Key" class="input">
         <p class="hint" style="font-size: 0.85em; margin: -5px 0 10px 0; color: #666;">Creator key can be found in DEPLOYMENT.md</p>
         <input type="text" id="createPlayerName" placeholder="Your Display Name" maxlength="20" class="input">
+        
+        <div style="margin: 15px 0;">
+          <label style="display: block; margin-bottom: 8px; font-weight: bold;">Game Mode:</label>
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin-bottom: 5px;">
+            <input type="radio" name="gameMode" id="modeMultiplayer" value="multiplayer" checked style="width: 18px; height: 18px;">
+            <span>Multiplayer (Online with Friends)</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+            <input type="radio" name="gameMode" id="modeSinglePlayer" value="singleplayer" style="width: 18px; height: 18px;">
+            <span>Single Player (vs AI Bots)</span>
+          </label>
+        </div>
+        
+        <div style="margin: 15px 0;">
+          <label for="botCount" style="display: block; margin-bottom: 5px; font-weight: bold;">Number of AI Bots (0-8):</label>
+          <input type="number" id="botCount" min="0" max="8" value="0" class="input" style="width: 100px;">
+          <p class="hint" style="font-size: 0.85em; margin: 5px 0 0 0; color: #666;">Add AI opponents in single-player or multiplayer</p>
+        </div>
+        
+        <div style="margin: 15px 0;">
+          <label for="botDifficulty" style="display: block; margin-bottom: 5px; font-weight: bold;">Bot Difficulty:</label>
+          <select id="botDifficulty" class="input">
+            <option value="easy">Easy - Casual play, random decisions</option>
+            <option value="medium" selected>Medium - Balanced strategy</option>
+            <option value="hard">Hard - Aggressive and optimal play</option>
+          </select>
+        </div>
+        
         <div style="margin: 10px 0;">
           <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
             <input type="checkbox" id="naturalEventsToggle" checked style="width: 20px; height: 20px;">

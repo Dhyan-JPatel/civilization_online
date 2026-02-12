@@ -8,6 +8,8 @@ import { getDatabase, ref, set, get, update, onValue, runTransaction, push, remo
 // Constants
 const CREATOR_KEY = 'BeforeRoboticsGame';
 const PHASES = ['UPKEEP', 'INTERNAL_PRESSURE', 'STATE_ACTIONS', 'WAR', 'REBELLION', 'NATURAL_EVENTS', 'CLEANUP'];
+const MAX_PLAYERS = 30;  // Maximum total players (humans + bots)
+const MAX_BOTS = 8;  // Maximum number of bots allowed
 
 // Global state
 let app;
@@ -87,7 +89,7 @@ function createDeck() {
 }
 
 // Create Game
-async function createGame(playerName, enableNaturalEvents = true) {
+async function createGame(playerName, enableNaturalEvents = true, botCount = 0, botDifficulty = 'medium', gameMode = 'multiplayer') {
   if (!db) {
     alert('Firebase not initialized');
     return null;
@@ -110,11 +112,17 @@ async function createGame(playerName, enableNaturalEvents = true) {
     createdAt: Date.now(),
     turnOrder: [playerId],  // Track player order for turn-based play
     currentTurnIndex: 0,  // Index in turnOrder for current player's turn
+    gameMode: gameMode,  // 'singleplayer' or 'multiplayer'
+    botConfig: {
+      count: Math.min(Math.max(0, botCount), MAX_BOTS),  // Ensure 0-8 range
+      difficulty: botDifficulty  // 'easy', 'medium', 'hard'
+    },
     players: {
       [playerId]: {
         id: playerId,
         name: playerName,
         isHost: true,
+        isBot: false,
         online: true,
         lastSeen: Date.now(),
         stats: {
@@ -166,7 +174,7 @@ async function createGame(playerName, enableNaturalEvents = true) {
     localStorage.setItem('currentPlayerId', playerId);
     localStorage.setItem('currentPlayerName', playerName);
     
-    console.log(`✅ Game created: ${gameCode}`);
+    console.log(`✅ Game created: ${gameCode} (Mode: ${gameMode}, Bots: ${botCount})`);
     return { gameCode, playerId, playerName };
   } catch (error) {
     console.error('❌ Failed to create game:', error);
@@ -195,8 +203,8 @@ async function joinGame(gameCode, playerName) {
       }
       
       const playerCount = Object.keys(game.players || {}).length;
-      if (playerCount >= 6) {
-        throw new Error('Game is full (max 6 players)');
+      if (playerCount >= MAX_PLAYERS) {
+        throw new Error(`Game is full (max ${MAX_PLAYERS} players)`);
       }
       
       const playerId = generatePlayerId();
@@ -208,6 +216,7 @@ async function joinGame(gameCode, playerName) {
         id: playerId,
         name: playerName,
         isHost: false,
+        isBot: false,  // Human player
         online: true,
         lastSeen: Date.now(),
         stats: {
@@ -279,6 +288,93 @@ async function joinGame(gameCode, playerName) {
   }
 }
 
+// Add Bot Players to Game
+async function addBotPlayers(gameCode, count, difficulty) {
+  if (!db) {
+    console.error('Firebase not initialized');
+    return;
+  }
+  
+  const botNames = [
+    'Emperor Augustus', 'Queen Cleopatra', 'King Hammurabi', 'Empress Wu',
+    'Sultan Suleiman', 'Pharaoh Ramses', 'Czar Peter', 'Kaiser Wilhelm'
+  ];
+  
+  const gameRef = ref(db, `games/${gameCode}`);
+  
+  try {
+    for (let i = 0; i < count; i++) {
+      await runTransaction(gameRef, (game) => {
+        if (!game) {
+          throw new Error('Game not found');
+        }
+        
+        const playerCount = Object.keys(game.players || {}).length;
+        if (playerCount >= MAX_PLAYERS) {
+          console.warn('Cannot add more bots - game is full');
+          return game;  // Don't add more bots
+        }
+        
+        const botId = 'bot_' + Date.now() + '_' + Math.random().toString(36).slice(2, 11);
+        const botName = botNames[i % botNames.length];
+        const deck = createDeck();
+        const hand = deck.slice(0, 4);
+        const remainingDeck = deck.slice(4);
+        
+        game.players[botId] = {
+          id: botId,
+          name: botName,
+          isHost: false,
+          isBot: true,
+          botDifficulty: difficulty,
+          online: true,
+          lastSeen: Date.now(),
+          stats: {
+            unrest: 0,
+            economy: 0,
+            military: 0,
+            food: 0,
+            luxury: 0,
+            morale: 0,
+            population: 0,
+            farms: 1
+          },
+          hand: hand,
+          deck: remainingDeck,
+          discardPile: [],
+          emergencyCards: 2,
+          emergencyCardUsedThisRound: false,
+          actions: {
+            boughtCard: false,
+            boughtFarm: false,
+            boughtLuxury: false,
+            reducedUnrest: false,
+            declaredWar: false,
+            traded: false,
+            actionsUsed: 0
+          },
+          wars: {},
+          militaryAssignments: {},
+          rebellion: null,
+          collapsed: false
+        };
+        
+        // Add bot to turn order
+        if (!game.turnOrder) {
+          game.turnOrder = [];
+        }
+        game.turnOrder.push(botId);
+        
+        return game;
+      });
+    }
+    
+    console.log(`✅ Added ${count} bot players (difficulty: ${difficulty})`);
+  } catch (error) {
+    console.error('❌ Failed to add bot players:', error);
+  }
+}
+
 // Start Game
 async function startGame() {
   if (!db || !currentGameCode || !isHost) return;
@@ -286,6 +382,15 @@ async function startGame() {
   const gameRef = ref(db, `games/${currentGameCode}`);
   
   try {
+    // First, get the game data to check if we need to add bots
+    const gameSnapshot = await get(gameRef);
+    const game = gameSnapshot.val();
+    
+    if (game && game.botConfig && game.botConfig.count > 0) {
+      // Add bot players before starting the game
+      await addBotPlayers(currentGameCode, game.botConfig.count, game.botConfig.difficulty);
+    }
+    
     await update(gameRef, {
       started: true,
       phase: 'UPKEEP',
@@ -2257,6 +2362,7 @@ export {
   initFirebase,
   createGame,
   joinGame,
+  addBotPlayers,  // Add bot players to game
   startGame,
   advancePhase,
   advanceTurn,  // Advance to next player's turn
@@ -2281,7 +2387,9 @@ export {
   isPlayerTurn,  // Check if it's a player's turn
   getCurrentTurnPlayer,  // Get current turn player ID
   fetchCurrentGameState,  // Fetch current game state from Firebase
-  CREATOR_KEY
+  CREATOR_KEY,
+  MAX_PLAYERS,  // Export max players constant
+  MAX_BOTS  // Export max bots constant
 };
 
 // Export getter functions for dynamic state

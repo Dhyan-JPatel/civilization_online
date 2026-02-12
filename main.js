@@ -159,6 +159,9 @@ async function handleCreateGame() {
   const creatorKey = document.getElementById('creatorKey').value.trim();
   const playerName = document.getElementById('createPlayerName').value.trim();
   const naturalEvents = document.getElementById('naturalEventsToggle').checked;
+  const gameMode = document.querySelector('input[name="gameMode"]:checked').value;
+  const botCount = parseInt(document.getElementById('botCount').value) || 0;
+  const botDifficulty = document.getElementById('botDifficulty').value;
   
   if (creatorKey !== CREATOR_KEY) {
     alert(`❌ Invalid creator key. Expected: "${CREATOR_KEY}"`);
@@ -170,8 +173,13 @@ async function handleCreateGame() {
     return;
   }
   
+  if (botCount < 0 || botCount > 8) {
+    alert('❌ Bot count must be between 0 and 8');
+    return;
+  }
+  
   try {
-    const result = await createGame(playerName, naturalEvents);
+    const result = await createGame(playerName, naturalEvents, botCount, botDifficulty, gameMode);
     
     if (result) {
       // Start listening to game state
