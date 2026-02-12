@@ -1380,7 +1380,9 @@ async function buyCard() {
       // Consume economy cards worth 2 economy
       consumeEconomy(player, 2);
       
-      // Economy will be recalculated automatically from remaining cards
+      // Recalculate economy and military from remaining cards
+      player.stats.economy = calculateEconomy(player.hand);
+      player.stats.military = calculateMilitary(player.hand);
       
       return game;
     });
@@ -1436,6 +1438,10 @@ async function buyFarm() {
       
       // Consume economy cards worth 5 economy
       consumeEconomy(player, 5);
+      
+      // Recalculate economy and military from remaining cards
+      player.stats.economy = calculateEconomy(player.hand);
+      player.stats.military = calculateMilitary(player.hand);
       
       return game;
     });
@@ -1498,6 +1504,10 @@ async function buyLuxury() {
       
       // Consume economy cards worth 1 economy
       consumeEconomy(player, 1);
+      
+      // Recalculate economy and military from remaining cards
+      player.stats.economy = calculateEconomy(player.hand);
+      player.stats.military = calculateMilitary(player.hand);
       
       return game;
     });
