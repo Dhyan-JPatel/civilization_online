@@ -1372,13 +1372,13 @@ async function buyCard() {
         }
       }
       
+      // Consume economy cards worth 2 economy BEFORE drawing
+      consumeEconomy(player, 2);
+      
       const drawnCard = player.deck.shift();
       player.hand.push(drawnCard);
       player.actions.boughtCard = true;
       player.actions.actionsUsed += 1; // Increment action counter
-      
-      // Consume economy cards worth 2 economy
-      consumeEconomy(player, 2);
       
       // Recalculate economy and military from remaining cards
       player.stats.economy = calculateEconomy(player.hand);
