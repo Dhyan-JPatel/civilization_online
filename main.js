@@ -489,7 +489,8 @@ function updateGameUI(game) {
   const collapseBtn = document.getElementById('actionEconomicCollapse');
   if (hasEconomicCollapse && isStateActionsPhase && isMyTurn) {
     collapseBtn.style.display = 'block';
-    collapseBtn.disabled = false;
+    // Disable if action limit reached
+    collapseBtn.disabled = !canTakeMoreActions;
   } else {
     collapseBtn.style.display = 'none';
   }
