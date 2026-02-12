@@ -32,6 +32,7 @@ import {
   getMaxActions,  // Import helper to check action limits
   isPlayerTurn,  // Check if it's a player's turn
   getCurrentTurnPlayer,  // Get current turn player ID
+  fetchCurrentGameState,  // Fetch current game state from Firebase
   CREATOR_KEY
 } from './game.js';
 
@@ -105,7 +106,15 @@ function setupEventListeners() {
   document.getElementById('leaveGameBtn').addEventListener('click', handleLeaveGame);
   
   // Game Screen
-  document.getElementById('actionBuyCard').addEventListener('click', () => buyCard());
+  document.getElementById('actionBuyCard').addEventListener('click', async () => {
+    await buyCard();
+    // Fetch latest game state to ensure UI is updated with the new card
+    const game = await fetchCurrentGameState();
+    if (game) {
+      currentGame = game;
+      updateGameUI(game);
+    }
+  });
   document.getElementById('actionBuyFarm').addEventListener('click', () => buyFarm());
   document.getElementById('actionBuyLuxury').addEventListener('click', () => buyLuxury());
   document.getElementById('actionReduceUnrest').addEventListener('click', () => reduceUnrest());

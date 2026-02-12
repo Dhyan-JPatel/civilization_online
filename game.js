@@ -2280,6 +2280,7 @@ export {
   getMaxActions,  // Export helper for UI to check action limits
   isPlayerTurn,  // Check if it's a player's turn
   getCurrentTurnPlayer,  // Get current turn player ID
+  fetchCurrentGameState,  // Fetch current game state from Firebase
   CREATOR_KEY
 };
 
@@ -2298,4 +2299,18 @@ export function getCurrentPlayerName() {
 
 export function getIsHost() {
   return isHost;
+}
+
+// Fetch current game state from Firebase
+export async function fetchCurrentGameState() {
+  if (!db || !currentGameCode) return null;
+  
+  try {
+    const gameRef = ref(db, `games/${currentGameCode}`);
+    const snapshot = await get(gameRef);
+    return snapshot.val();
+  } catch (error) {
+    console.error('Failed to fetch game state:', error);
+    return null;
+  }
 }
