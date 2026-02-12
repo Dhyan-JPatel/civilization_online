@@ -118,6 +118,7 @@ async function createGame(playerName, enableNaturalEvents = true, botCount = 0, 
     createdAt: Date.now(),
     turnOrder: [playerId],  // Track player order for turn-based play
     currentTurnIndex: 0,  // Index in turnOrder for current player's turn
+    turnsTakenThisPhase: [],  // Track which players have acted in STATE_ACTIONS phase
     gameMode: gameMode,  // 'singleplayer' or 'multiplayer'
     botConfig: {
       count: Math.min(Math.max(0, botCount), MAX_BOTS),  // Defensive: clamp 0-8 range (UI also validates)
@@ -769,6 +770,9 @@ async function resetActions() {
       }
     }
     updates.currentTurnIndex = startIndex;
+    // Reset turns tracking for new STATE_ACTIONS phase
+    // This ensures players can take turns again in the new STATE_ACTIONS phase
+    updates.turnsTakenThisPhase = [];
     
     await update(gameRef, updates);
     
@@ -833,6 +837,50 @@ function getCurrentTurnPlayer(game) {
   return null;
 }
 
+/**
+ * Check if all active players have taken their turn in STATE_ACTIONS phase
+ * If yes, automatically advance to the next phase
+ */
+async function checkAndAdvancePhaseIfComplete(gameCode) {
+  if (!db) return;
+  
+  const gameRef = ref(db, `games/${gameCode}`);
+  
+  try {
+    const snapshot = await get(gameRef);
+    const game = snapshot.val();
+    
+    if (!game || game.phase !== 'STATE_ACTIONS') return;
+    
+    // Get all active (non-collapsed) player IDs
+    const activePlayers = game.turnOrder.filter(playerId => {
+      const player = game.players[playerId];
+      return player && !player.collapsed;
+    });
+    
+    // If no active players, don't advance
+    if (activePlayers.length === 0) return;
+    
+    // Check if all active players have taken their turn
+    const turnsTaken = game.turnsTakenThisPhase || [];
+    const allPlayersTakenTurn = activePlayers.every(playerId => turnsTaken.includes(playerId));
+    
+    if (allPlayersTakenTurn) {
+      console.log('✅ All players have completed their turns in STATE_ACTIONS phase. Advancing to next phase...');
+      
+      // Only host should advance the phase to avoid race conditions
+      // In single-player mode, the creator is always the host
+      if (isHost) {
+        await advancePhase();
+      } else {
+        console.log('⚠️ Waiting for host to advance phase...');
+      }
+    }
+  } catch (error) {
+    console.error('❌ Failed to check phase completion:', error);
+  }
+}
+
 // Advance to next player's turn
 async function advanceTurn() {
   if (!db || !currentGameCode || !currentPlayerId) {
@@ -869,6 +917,14 @@ async function advanceTurn() {
         return; // Abort transaction
       }
       
+      // Mark this player as having taken their turn
+      if (!game.turnsTakenThisPhase) {
+        game.turnsTakenThisPhase = [];
+      }
+      if (!game.turnsTakenThisPhase.includes(currentPlayerId)) {
+        game.turnsTakenThisPhase.push(currentPlayerId);
+      }
+      
       // Find next non-collapsed player
       let nextIndex = (game.currentTurnIndex + 1) % game.turnOrder.length;
       let attempts = 0;
@@ -902,6 +958,9 @@ async function advanceTurn() {
     if (result.committed) {
       console.log('✅ Advanced to next player\'s turn');
       alert('✅ Turn ended! Next player\'s turn.');
+      
+      // Check if all players have taken their turn and advance phase if complete
+      await checkAndAdvancePhaseIfComplete(currentGameCode);
     }
   } catch (error) {
     console.error('❌ Failed to advance turn:', error);
@@ -1028,6 +1087,14 @@ async function advanceBotTurn(gameCode, botId) {
       // Validate it's this bot's turn
       if (!isPlayerTurn(game, botId)) return game;
       
+      // Mark this bot as having taken their turn
+      if (!game.turnsTakenThisPhase) {
+        game.turnsTakenThisPhase = [];
+      }
+      if (!game.turnsTakenThisPhase.includes(botId)) {
+        game.turnsTakenThisPhase.push(botId);
+      }
+      
       // Find next non-collapsed player
       let nextIndex = (game.currentTurnIndex + 1) % game.turnOrder.length;
       let attempts = 0;
@@ -1049,6 +1116,9 @@ async function advanceBotTurn(gameCode, botId) {
     });
     
     console.log('✅ Bot turn advanced');
+    
+    // Check if all players have taken their turn and advance phase if complete
+    await checkAndAdvancePhaseIfComplete(gameCode);
   } catch (error) {
     console.error('❌ Failed to advance bot turn:', error);
   }
@@ -1065,6 +1135,19 @@ async function checkAndExecuteBotTurn(game) {
   
   const currentPlayer = game.players[currentTurnPlayerId];
   if (!currentPlayer || !currentPlayer.isBot || currentPlayer.collapsed) return;
+  
+  // SAFEGUARD: Check if this bot has already taken their turn this phase
+  // This prevents infinite loops where bots keep cycling through turns
+  const turnsTaken = game.turnsTakenThisPhase || [];
+  if (turnsTaken.includes(currentTurnPlayerId)) {
+    console.log('⚠️ Bot has already taken turn this phase, skipping to prevent loop');
+    console.log('   Current phase:', game.phase);
+    console.log('   Turn order:', game.turnOrder);
+    console.log('   Current turn index:', game.currentTurnIndex);
+    console.log('   Bot ID:', currentTurnPlayerId);
+    console.log('   Turns taken this phase:', turnsTaken);
+    return;
+  }
   
   // Clear any existing timeout
   if (botTurnTimeout) {
