@@ -229,11 +229,16 @@ function findBestWarTarget(game, botId, difficulty) {
   let bestScore = -Infinity;
   
   for (const [playerId, player] of Object.entries(game.players)) {
-    if (playerId === botId || player.collapsed || player.isBot) continue;
+    if (playerId === botId || player.collapsed) continue;
     if (bot.wars && bot.wars[playerId]) continue; // Already at war
     
     // Calculate target attractiveness
     let score = 0;
+    
+    // Slightly prefer human players over bots for more engaging gameplay
+    if (!player.isBot) {
+      score += 10;
+    }
     
     // Prefer weaker targets
     const militaryRatio = bot.stats.military / Math.max(1, player.stats.military);

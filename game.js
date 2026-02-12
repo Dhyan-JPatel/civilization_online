@@ -13,6 +13,8 @@ const CREATOR_KEY = 'BeforeRoboticsGame';
 const PHASES = ['UPKEEP', 'INTERNAL_PRESSURE', 'STATE_ACTIONS', 'WAR', 'REBELLION', 'NATURAL_EVENTS', 'CLEANUP'];
 const MAX_PLAYERS = 30;  // Maximum total players (humans + bots)
 const MAX_BOTS = 8;  // Maximum number of bots allowed
+const BOT_INITIAL_DELAY_MS = 1500;  // Delay before bot starts their turn
+const BOT_ACTION_DELAY_MS = 1000;  // Delay between bot actions
 
 // Global state
 let app;
@@ -118,7 +120,7 @@ async function createGame(playerName, enableNaturalEvents = true, botCount = 0, 
     currentTurnIndex: 0,  // Index in turnOrder for current player's turn
     gameMode: gameMode,  // 'singleplayer' or 'multiplayer'
     botConfig: {
-      count: Math.min(Math.max(0, botCount), MAX_BOTS),  // Ensure 0-8 range
+      count: Math.min(Math.max(0, botCount), MAX_BOTS),  // Defensive: clamp 0-8 range (UI also validates)
       difficulty: botDifficulty  // 'easy', 'medium', 'hard'
     },
     players: {
@@ -319,7 +321,8 @@ async function addBotPlayers(gameCode, count, difficulty) {
           return game;  // Don't add more bots
         }
         
-        const botId = 'bot_' + Date.now() + '_' + Math.random().toString(36).slice(2, 11);
+        // Include loop index in ID for uniqueness
+        const botId = 'bot_' + Date.now() + '_' + i + '_' + Math.random().toString(36).slice(2, 11);
         const botName = botNames[i % botNames.length];
         const deck = createDeck();
         const hand = deck.slice(0, 4);
@@ -999,7 +1002,7 @@ async function executeBotTurn(gameCode, botId) {
           await advanceBotTurn(gameCode, botId);
         }
       }
-    }, 1000); // 1 second delay between bot actions
+    }, BOT_ACTION_DELAY_MS);  // Delay between bot actions
     
   } catch (error) {
     console.error('❌ Failed to execute bot turn:', error);
@@ -1071,7 +1074,7 @@ async function checkAndExecuteBotTurn(game) {
   // Schedule bot turn with a small delay for realism
   botTurnTimeout = setTimeout(() => {
     executeBotTurn(game.code, currentTurnPlayerId);
-  }, 1500); // 1.5 second delay before bot acts
+  }, BOT_INITIAL_DELAY_MS);  // Initial delay before bot starts turn
 }
 
 // Perform War Phase
