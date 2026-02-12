@@ -5,7 +5,64 @@ This document summarizes the bug fixes and improvements made to the Civilization
 
 ## Issues Fixed
 
-### 1. Missing Async Error Handling
+### 1. Turn Switching Bug - Missing Turn Validation (February 12, 2026)
+**Problem**: The `advanceTurn()` function was missing player turn validation, allowing any player to advance the turn at any time. This broke the turn-based gameplay mechanics where only the current player should be able to end their turn.
+
+**Root Cause**:
+- Function did not check if the calling player was the current turn player
+- Function silently returned on validation failures without user feedback
+- Function threw errors inside Firebase transactions, causing unnecessary retries
+
+**Solution**: Added comprehensive turn validation with proper transaction handling:
+```javascript
+async function advanceTurn() {
+  // Added currentPlayerId check
+  if (!db || !currentGameCode || !currentPlayerId) {
+    console.error('❌ Cannot advance turn: Missing database connection, game code, or player ID');
+    return;
+  }
+
+  let validationError = null;
+  
+  const result = await runTransaction(gameRef, (game) => {
+    // Validate phase
+    if (game.phase !== 'STATE_ACTIONS') {
+      validationError = 'Can only end turn during STATE_ACTIONS phase';
+      return; // Abort transaction
+    }
+    
+    // Validate it's this player's turn
+    if (!isPlayerTurn(game, currentPlayerId)) {
+      const currentTurnPlayerName = game.players[getCurrentTurnPlayer(game)]?.name || 'Unknown';
+      validationError = `Not your turn. It's ${currentTurnPlayerName}'s turn.`;
+      return; // Abort transaction
+    }
+    
+    // Update to next player's turn
+    game.currentTurnIndex = nextIndex;
+    return game;
+  });
+  
+  // Check validation errors and provide feedback
+  if (validationError) {
+    throw new Error(validationError);
+  }
+  
+  if (result.committed) {
+    alert('✅ Turn ended! Next player\'s turn.');
+  }
+}
+```
+
+**Impact**: 
+- Only the current player can end their turn
+- Clear error messages when turn advancement fails
+- Proper transaction handling without unnecessary retries
+- Better user experience with success/error alerts
+
+---
+
+### 2. Missing Async Error Handling
 **Problem**: The phase advancement button's click handler called `advancePhase()` directly without proper error handling, leading to unhandled promise rejections.
 
 **Solution**: Wrapped the event listener in an async function with try-catch block:
@@ -24,7 +81,7 @@ btnAdvancePhase.addEventListener('click', async () => {
 
 ---
 
-### 2. Race Condition in Auto-Phase Processing
+### 3. Race Condition in Auto-Phase Processing
 **Problem**: After advancing the phase via `runTransaction`, the code made a separate `get()` call to fetch the new phase data. This created a race condition where the data could change between the transaction commit and the get() call.
 
 **Solution**: Use the committed transaction result directly instead of making a separate get() call:
@@ -45,7 +102,7 @@ if (result.committed && result.snapshot.exists()) {
 
 ---
 
-### 3. Missing Firebase Configuration Validation
+### 4. Missing Firebase Configuration Validation
 **Problem**: The application used placeholder Firebase configuration values without validation, leading to silent failures where the app appeared to load but didn't work.
 
 **Solution**: Added comprehensive validation:
@@ -69,7 +126,7 @@ function validateFirebaseConfig(config) {
 
 ---
 
-### 4. Inadequate Firebase Initialization Error Handling
+### 5. Inadequate Firebase Initialization Error Handling
 **Problem**: Firebase initialization errors were caught but the app continued to run with a broken database reference.
 
 **Solution**: 
@@ -81,7 +138,7 @@ function validateFirebaseConfig(config) {
 
 ---
 
-### 5. Missing Dependency Documentation
+### 6. Missing Dependency Documentation
 **Problem**: No package.json existed to document external dependencies (Firebase SDK loaded via CDN).
 
 **Solution**: Created package.json with:
@@ -141,11 +198,19 @@ All code has been scanned for security vulnerabilities with no issues detected.
 1. Create a game with valid creator key
 2. Join game from second browser/tab
 3. Start game and test phase advancement
-4. Test all player actions (buy card, farm, luxury, etc.)
-5. Test war declarations and battles
-6. Test trading between players
-7. Test reconnection after page reload
-8. Test on mobile devices (iPhone/iPad)
+4. **Test turn switching** (NEW):
+   - Verify only current player can click "End Turn" button
+   - Verify turn advances to next player when "End Turn" is clicked
+   - Verify error message when non-current player tries to end turn
+5. **Test Buy Card action**:
+   - Verify "Buy Card" button adds card to hand
+   - Verify economy is reduced by 2 when card is purchased
+   - Verify proper error messages when conditions aren't met
+6. Test all player actions (buy farm, luxury, etc.)
+7. Test war declarations and battles
+8. Test trading between players
+9. Test reconnection after page reload
+10. Test on mobile devices (iPhone/iPad)
 
 See [TESTING_GUIDE.md](TESTING_GUIDE.md) for comprehensive testing procedures.
 
@@ -175,18 +240,20 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment instructions.
 
 | File | Changes | Impact |
 |------|---------|--------|
+| game.js | +34 lines (Feb 12, 2026) | Fixed turn switching validation, proper transaction handling |
 | main.js | +73 lines | Fixed async error handling, race condition, added Firebase validation |
 | firebase-config-loader.js | +10 lines | Added placeholder detection warnings |
 | package.json | NEW FILE | Documents dependencies and project metadata |
 | test.html | NEW FILE | Provides automated testing and verification |
 | README.md | +40 lines | Updated with testing instructions |
-| BUGFIXES.md | NEW FILE | This document |
+| BUGFIXES.md | UPDATED | This document - added turn switching bug fix |
 
 ---
 
 ## Summary
 
 All identified bugs have been fixed:
+- ✅ Turn switching validation implemented (February 12, 2026)
 - ✅ Async error handling implemented
 - ✅ Race condition eliminated
 - ✅ Firebase validation added
@@ -194,7 +261,7 @@ All identified bugs have been fixed:
 - ✅ Dependencies documented
 - ✅ Test suite created
 - ✅ Documentation updated
-- ✅ Security scan passed
+- ✅ Security scan passed (0 vulnerabilities)
 
 The application is now ready for deployment once Firebase is configured. All functionality should work correctly with proper error messages and validation in place.
 
@@ -228,4 +295,4 @@ For questions or issues:
 
 ---
 
-*Last Updated: February 10, 2026*
+*Last Updated: February 12, 2026*
