@@ -7,6 +7,7 @@
     // (Set these during your build process)
     if (typeof __FIREBASE_CONFIG_FROM_BUILD__ !== 'undefined') {
         window.__FIREBASE_CONFIG__ = __FIREBASE_CONFIG_FROM_BUILD__;
+        console.log('✅ Firebase config loaded from build-time injection');
         return;
     }
     
@@ -17,6 +18,7 @@
         .then(response => response.json())
         .then(config => {
             window.__FIREBASE_CONFIG__ = config;
+            console.log('✅ Firebase config loaded from secure endpoint');
         })
         .catch(err => console.error('Failed to load Firebase config:', err));
     */
@@ -35,14 +37,17 @@
   appId: "1:786254154239:web:9320036b347a64f9567fca"
 };
         
+        console.log('✅ Firebase config loaded from local development config');
+        
         // Log a warning if placeholder values are detected
         const hasPlaceholders = Object.values(window.__FIREBASE_CONFIG__).some(value => 
             typeof value === 'string' && (value.includes('YOUR_') || value.includes('your-project'))
         );
         
         if (hasPlaceholders) {
-            console.warn('⚠️ Firebase configuration contains placeholder values. The application will not work until you configure it with your actual Firebase project settings.');
-            console.warn('See DEPLOYMENT.md for instructions on how to configure Firebase.');
+            console.error('⚠️ Firebase configuration contains placeholder values. The application will not work until you configure it with your actual Firebase project settings.');
+            console.error('See DEPLOYMENT.md for instructions on how to configure Firebase.');
+            alert('⚠️ Firebase configuration error: Placeholder values detected.\n\nPlease see DEPLOYMENT.md for setup instructions.');
         }
     }
 })();
