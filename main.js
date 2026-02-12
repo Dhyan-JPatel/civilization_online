@@ -107,12 +107,20 @@ function setupEventListeners() {
   
   // Game Screen
   document.getElementById('actionBuyCard').addEventListener('click', async () => {
-    await buyCard();
-    // Fetch latest game state to ensure UI is updated with the new card
-    const game = await fetchCurrentGameState();
-    if (game) {
-      currentGame = game;
-      updateGameUI(game);
+    try {
+      await buyCard();
+      // Fetch latest game state to ensure UI is updated with the new card
+      // Note: The Firebase listener will also update the UI asynchronously,
+      // but this ensures immediate feedback to the user
+      const game = await fetchCurrentGameState();
+      if (game) {
+        currentGame = game;
+        updateGameUI(game);
+      }
+    } catch (error) {
+      // buyCard() already handles and displays errors internally via alerts
+      // This catch block ensures any unexpected errors don't break the UI
+      console.error('Error in buyCard click handler:', error);
     }
   });
   document.getElementById('actionBuyFarm').addEventListener('click', () => buyFarm());
