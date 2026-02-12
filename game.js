@@ -723,7 +723,10 @@ function getCurrentTurnPlayer(game) {
 
 // Advance to next player's turn
 async function advanceTurn() {
-  if (!db || !currentGameCode || !currentPlayerId) return;
+  if (!db || !currentGameCode || !currentPlayerId) {
+    console.error('❌ Cannot advance turn: Missing database connection, game code, or player ID');
+    return;
+  }
 
   const gameRef = ref(db, `games/${currentGameCode}`);
   
